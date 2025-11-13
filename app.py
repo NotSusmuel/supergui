@@ -1,11 +1,12 @@
 from flask import Flask, render_template, jsonify, request
 from datetime import datetime, timedelta
 import pytz
-from icalendar import Calendar
+import csv
 import requests
 import os
 from pathlib import Path
 from dotenv import load_dotenv
+import re
 
 # Load environment variables from .env file
 load_dotenv()
@@ -68,36 +69,112 @@ def get_subject_name(abbreviation):
     return SUBJECT_MAPPING.get(abbreviation, abbreviation)
 
 
-def fetch_ics_from_url(url):
-    """Fetch ICS file from URL"""
+def fetch_and_convert_ics_to_csv(url):
+    """
+    Fetch ICS from URL and convert to CSV format
+    Returns CSV file path or None on error
+    """
     try:
+        # Download ICS
         response = requests.get(url, timeout=10)
         response.raise_for_status()
-        return response.content
+        
+        temp_ics = os.path.join(app.config['UPLOAD_FOLDER'], 'temp_timetable.ics')
+        with open(temp_ics, 'wb') as f:
+            f.write(response.content)
+        
+        # Parse ICS and convert to CSV
+        events = []
+        with open(temp_ics, 'r', encoding='utf-8', errors='ignore') as f:
+            lines = f.readlines()
+        
+        event = {}
+        for line in lines:
+            line = line.strip()
+            if line.startswith("BEGIN:VEVENT"):
+                event = {}
+            elif line.startswith("SUMMARY:"):
+                event["Subject"] = line.replace("SUMMARY:", "")
+            elif line.startswith("DTSTART:"):
+                dtstart = datetime.strptime(line.replace("DTSTART:", ""), "%Y%m%dT%H%M%SZ")
+                event["Start Date"] = dtstart.strftime("%m/%d/%Y")
+                event["Start Time"] = dtstart.strftime("%H:%M")
+            elif line.startswith("DTEND:"):
+                dtend = datetime.strptime(line.replace("DTEND:", ""), "%Y%m%dT%H%M%SZ")
+                event["End Date"] = dtend.strftime("%m/%d/%Y")
+                event["End Time"] = dtend.strftime("%H:%M")
+            elif line.startswith("END:VEVENT"):
+                if event:  # Only add if event has data
+                    events.append(event)
+        
+        # Write to CSV
+        csv_path = os.path.join(app.config['UPLOAD_FOLDER'], 'timetable.csv')
+        with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+            fieldnames = ["Subject", "Start Date", "Start Time", "End Date", "End Time", "Description", "Location"]
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writeheader()
+            for e in events:
+                writer.writerow({
+                    "Subject": e.get("Subject", ""),
+                    "Start Date": e.get("Start Date", ""),
+                    "Start Time": e.get("Start Time", ""),
+                    "End Date": e.get("End Date", ""),
+                    "End Time": e.get("End Time", ""),
+                    "Description": "",
+                    "Location": ""
+                })
+        
+        print(f"CSV file created: {csv_path}")
+        return csv_path
+        
     except Exception as e:
-        print(f"Error fetching ICS from URL: {e}")
+        print(f"Error converting ICS to CSV: {e}")
         return None
 
-def parse_ics_content(ics_content):
-    """Parse ICS content and extract events"""
+
+def parse_csv_timetable(csv_path):
+    """
+    Parse CSV timetable file
+    Format: Subject,Start Date,Start Time,End Date,End Time,Description,Location
+    Example: BIO sn 1Mf H1.03,10/22/2025,08:35,10/22/2025,09:20,,
+    """
+    events = []
+    zurich_tz = pytz.timezone('Europe/Zurich')
+    
     try:
-        import re
-        cal = Calendar.from_ical(ics_content)
-        
-        events = []
-        now = datetime.now(pytz.UTC)
-        
-        for component in cal.walk():
-            if component.name == "VEVENT":
-                summary = str(component.get('summary', 'No Title'))
-                dtstart = component.get('dtstart')
-                dtend = component.get('dtend')
-                description = str(component.get('description', ''))
-                location = str(component.get('location', ''))
+        with open(csv_path, 'r', encoding='utf-8') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                summary = row['Subject'].strip()
+                if not summary:
+                    continue
+                
+                # Parse dates and times
+                start_date_str = row['Start Date'].strip()
+                start_time_str = row['Start Time'].strip()
+                end_date_str = row['End Date'].strip()
+                end_time_str = row['End Time'].strip()
+                
+                if not start_date_str or not start_time_str:
+                    continue
+                
+                # Combine date and time
+                start_datetime_str = f"{start_date_str} {start_time_str}"
+                end_datetime_str = f"{end_date_str} {end_time_str}"
+                
+                # Parse datetime
+                start_dt = datetime.strptime(start_datetime_str, "%m/%d/%Y %H:%M")
+                end_dt = datetime.strptime(end_datetime_str, "%m/%d/%Y %H:%M")
+                
+                # Localize to Zurich timezone
+                start_dt = zurich_tz.localize(start_dt)
+                end_dt = zurich_tz.localize(end_dt)
                 
                 # Parse KSR format: "SUBJECT TEACHER CLASS ROOM"
-                # Example: "GG klk 1Mf P1.09" = Geografie, teacher klk, class 1Mf, room P1.09
+                # Example: "BIO sn 1Mf H1.03" or "M sig 1Mf HL3.01 (Prüfung)"
                 subject_display = summary  # Default to full summary
+                location = row.get('Location', '').strip()
+                description = row.get('Description', '').strip()
                 
                 # Extract room from SUMMARY if LOCATION is empty
                 if not location and summary:
@@ -122,86 +199,43 @@ def parse_ics_content(ics_content):
                     else:
                         subject_display = subject_name
                 
-                if dtstart:
-                    start_dt = dtstart.dt
-                    # KSR ICS times have 'Z' suffix but are actually in local Zurich time, not UTC
-                    # So we need to interpret them as Europe/Zurich times directly
-                    zurich_tz = pytz.timezone('Europe/Zurich')
-                    
-                    if isinstance(start_dt, datetime):
-                        if start_dt.tzinfo is None:
-                            # No timezone, treat as Zurich local time
-                            start_dt = zurich_tz.localize(start_dt)
-                        else:
-                            # Has timezone (UTC with Z), but it's actually local time
-                            # Remove the UTC timezone and re-interpret as Zurich time
-                            start_dt = start_dt.replace(tzinfo=None)
-                            start_dt = zurich_tz.localize(start_dt)
-                    else:
-                        # It's a date, convert to datetime at midnight in Zurich timezone
-                        start_dt = datetime.combine(start_dt, datetime.min.time())
-                        start_dt = zurich_tz.localize(start_dt)
-                    
-                    end_dt = None
-                    if dtend:
-                        end_dt = dtend.dt
-                        if isinstance(end_dt, datetime):
-                            if end_dt.tzinfo is None:
-                                # No timezone, treat as Zurich local time
-                                end_dt = zurich_tz.localize(end_dt)
-                            else:
-                                # Has timezone (UTC with Z), but it's actually local time
-                                # Remove the UTC timezone and re-interpret as Zurich time
-                                end_dt = end_dt.replace(tzinfo=None)
-                                end_dt = zurich_tz.localize(end_dt)
-                        else:
-                            end_dt = datetime.combine(end_dt, datetime.min.time())
-                            end_dt = zurich_tz.localize(end_dt)
-                    
-                    # Check if it's an exam:
-                    # - Look for "(Prüfung)" anywhere in SUMMARY or DESCRIPTION
-                    # - Note: teacher abbreviations like "klk" are NOT exam indicators
-                    is_exam = ('(prüfung)' in summary.lower() or 
-                              '(prüfung)' in description.lower())
-                    
-                    # Check for special events (cancelled, etc.)
-                    is_cancelled = any(keyword in summary.lower() or keyword in description.lower() 
-                                     for keyword in ['ausgefallen', 'cancelled', 'abgesagt', 'entfällt'])
-                    
-                    special_note = ''
-                    if is_cancelled:
-                        special_note = 'Ausgefallen'
-                    elif 'verschoben' in summary.lower() or 'verschoben' in description.lower():
-                        special_note = 'Verschoben'
-                    elif 'raumwechsel' in summary.lower() or 'raumwechsel' in description.lower():
-                        special_note = 'Raumwechsel'
-                    
-                    events.append({
-                        'summary': subject_display,
-                        'original_summary': summary,  # Keep original for reference
-                        'start': start_dt,
-                        'end': end_dt,
-                        'description': description,
-                        'location': location,
-                        'is_exam': is_exam,
-                        'is_cancelled': is_cancelled,
-                        'special_note': special_note
-                    })
+                # Check if it's an exam:
+                # - Look for "(Prüfung)" anywhere in SUMMARY or DESCRIPTION
+                # - Note: teacher abbreviations like "klk" are NOT exam indicators
+                is_exam = ('(prüfung)' in summary.lower() or 
+                          (description and '(prüfung)' in description.lower()))
+                
+                # Check for special events (cancelled, etc.)
+                is_cancelled = any(keyword in summary.lower() or (description and keyword in description.lower()) 
+                                 for keyword in ['ausgefallen', 'cancelled', 'abgesagt', 'entfällt'])
+                
+                special_note = ''
+                if is_cancelled:
+                    special_note = 'Ausgefallen'
+                elif 'verschoben' in summary.lower() or (description and 'verschoben' in description.lower()):
+                    special_note = 'Verschoben'
+                elif 'raumwechsel' in summary.lower() or (description and 'raumwechsel' in description.lower()):
+                    special_note = 'Raumwechsel'
+                
+                events.append({
+                    'summary': subject_display,
+                    'original_summary': summary,  # Keep original for reference
+                    'start': start_dt,
+                    'end': end_dt,
+                    'description': description if description and description != 'None' else '',
+                    'location': location,
+                    'is_exam': is_exam,
+                    'is_cancelled': is_cancelled,
+                    'special_note': special_note
+                })
         
         # Sort events by start time
         events.sort(key=lambda x: x['start'])
         return events
     except Exception as e:
-        print(f"Error parsing ICS content: {e}")
-        return []
-
-def parse_ics_file(filepath):
-    """Parse ICS file and extract events"""
-    try:
-        with open(filepath, 'rb') as f:
-            return parse_ics_content(f.read())
-    except Exception as e:
-        print(f"Error reading ICS file: {e}")
+        print(f"Error parsing CSV: {e}")
+        import traceback
+        traceback.print_exc()
         return []
 
 def get_next_lesson(events):
@@ -262,23 +296,21 @@ def get_timetable():
     mode = request.args.get('mode', 'auto')
     
     events = []
+    csv_path = os.path.join(app.config['UPLOAD_FOLDER'], 'timetable.csv')
     
     if mode == 'auto':
-        # Try to fetch from URL
-        ics_content = fetch_ics_from_url(app.config['ICS_URL'])
+        # Try to fetch from URL and convert to CSV
+        csv_file = fetch_and_convert_ics_to_csv(app.config['ICS_URL'])
         
-        if ics_content:
-            events = parse_ics_content(ics_content)
-        else:
-            # Auto fetch failed, fallback to local file
-            ics_files = list(Path(app.config['UPLOAD_FOLDER']).glob('*.ics'))
-            if ics_files:
-                events = parse_ics_file(ics_files[0])
+        if csv_file and os.path.exists(csv_file):
+            events = parse_csv_timetable(csv_file)
+        elif os.path.exists(csv_path):
+            # Auto fetch failed, fallback to existing local CSV
+            events = parse_csv_timetable(csv_path)
     else:
-        # Manual mode - use uploaded file only
-        ics_files = list(Path(app.config['UPLOAD_FOLDER']).glob('*.ics'))
-        if ics_files:
-            events = parse_ics_file(ics_files[0])
+        # Manual mode - use uploaded CSV file only
+        if os.path.exists(csv_path):
+            events = parse_csv_timetable(csv_path)
     
     if not events:
         return jsonify({
@@ -286,7 +318,7 @@ def get_timetable():
             'current_lesson': None,
             'todays_lessons': [],
             'exams': [],
-            'message': 'Keine Stundenplan-Daten verfügbar. Bitte ICS-Datei hochladen oder automatische Synchronisation aktivieren.'
+            'message': 'Keine Stundenplan-Daten verfügbar. Bitte CSV-Datei hochladen oder automatische Synchronisation aktivieren.'
         })
     
     next_lesson = get_next_lesson(events)
@@ -396,7 +428,7 @@ def get_weather():
 
 @app.route('/upload', methods=['POST'])
 def upload_file():
-    """Upload ICS file"""
+    """Upload ICS file and convert to CSV"""
     if 'file' not in request.files:
         return jsonify({'error': 'No file provided'}), 400
     
@@ -405,18 +437,65 @@ def upload_file():
     if file.filename == '':
         return jsonify({'error': 'No file selected'}), 400
     
-    if file and file.filename.endswith('.ics'):
-        # Remove old ICS files
-        for old_file in Path(app.config['UPLOAD_FOLDER']).glob('*.ics'):
-            old_file.unlink()
+    if file and (file.filename.endswith('.ics') or file.filename.endswith('.csv')):
+        if file.filename.endswith('.ics'):
+            # Save ICS file temporarily
+            temp_ics = os.path.join(app.config['UPLOAD_FOLDER'], 'uploaded_timetable.ics')
+            file.save(temp_ics)
+            
+            # Convert ICS to CSV
+            try:
+                events = []
+                with open(temp_ics, 'r', encoding='utf-8', errors='ignore') as f:
+                    lines = f.readlines()
+                
+                event = {}
+                for line in lines:
+                    line = line.strip()
+                    if line.startswith("BEGIN:VEVENT"):
+                        event = {}
+                    elif line.startswith("SUMMARY:"):
+                        event["Subject"] = line.replace("SUMMARY:", "")
+                    elif line.startswith("DTSTART:"):
+                        dtstart = datetime.strptime(line.replace("DTSTART:", ""), "%Y%m%dT%H%M%SZ")
+                        event["Start Date"] = dtstart.strftime("%m/%d/%Y")
+                        event["Start Time"] = dtstart.strftime("%H:%M")
+                    elif line.startswith("DTEND:"):
+                        dtend = datetime.strptime(line.replace("DTEND:", ""), "%Y%m%dT%H%M%SZ")
+                        event["End Date"] = dtend.strftime("%m/%d/%Y")
+                        event["End Time"] = dtend.strftime("%H:%M")
+                    elif line.startswith("END:VEVENT"):
+                        if event:
+                            events.append(event)
+                
+                # Write to CSV
+                csv_path = os.path.join(app.config['UPLOAD_FOLDER'], 'timetable.csv')
+                with open(csv_path, 'w', newline='', encoding='utf-8') as csvfile:
+                    fieldnames = ["Subject", "Start Date", "Start Time", "End Date", "End Time", "Description", "Location"]
+                    writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+                    writer.writeheader()
+                    for e in events:
+                        writer.writerow({
+                            "Subject": e.get("Subject", ""),
+                            "Start Date": e.get("Start Date", ""),
+                            "Start Time": e.get("Start Time", ""),
+                            "End Date": e.get("End Date", ""),
+                            "End Time": e.get("End Time", ""),
+                            "Description": "",
+                            "Location": ""
+                        })
+                
+                return jsonify({'message': 'ICS file uploaded and converted to CSV successfully'})
+            except Exception as e:
+                return jsonify({'error': f'Error converting ICS to CSV: {str(e)}'}), 500
         
-        # Save new file
-        filepath = os.path.join(app.config['UPLOAD_FOLDER'], 'timetable.ics')
-        file.save(filepath)
-        
-        return jsonify({'message': 'File uploaded successfully'})
+        else:  # CSV file
+            # Save CSV directly
+            filepath = os.path.join(app.config['UPLOAD_FOLDER'], 'timetable.csv')
+            file.save(filepath)
+            return jsonify({'message': 'CSV file uploaded successfully'})
     
-    return jsonify({'error': 'Invalid file type. Please upload an ICS file.'}), 400
+    return jsonify({'error': 'Invalid file type. Please upload an ICS or CSV file.'}), 400
 
 if __name__ == '__main__':
     # Use environment variable to control debug mode
