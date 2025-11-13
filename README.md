@@ -115,7 +115,7 @@ https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/dmbphs0g5i58gpwo7fxkja/timetabl
 - ✅ Alle 5 Minuten automatisch aktualisiert
 - ✅ Prüfungen werden erkannt durch "(Prüfung)" am Ende des Titels
 
-**Hinweis:** Falls die automatische Synchronisation nicht funktioniert (z.B. Netzwerkprobleme), wird eine entsprechende Meldung angezeigt.
+**Hinweis für Entwicklung:** Falls die automatische Synchronisation nicht funktioniert (z.B. Netzwerkprobleme oder in einer Sandbox-Umgebung), verwendet die App automatisch eine lokale Fallback-Datei (`uploads/timetable.ics`). Die mitgelieferte `sample_timetable.ics` enthält Beispieldaten mit zukünftigen Daten, die Sie zum Testen in den `uploads/` Ordner kopieren können.
 
 ### OneNote-Links konfigurieren
 
