@@ -5,9 +5,10 @@ Eine moderne Flask-Web-App mit HTML/CSS für Stundenplan-Verwaltung, Wetter-Anze
 ## Features
 
 ### 🕐 Echtzeit-Uhr
-- Moderne Anzeige mit Datum und Uhrzeit
+- Moderne Anzeige mit **leuchtendem Effekt**
 - Automatische Aktualisierung jede Sekunde
 - Deutsches Datumsformat
+- Gradient-Animation auf dem Logo
 
 ### 📅 Stundenplan-Verwaltung
 - **Automatische Aktualisierung** von KSR-Stundenplan-API
@@ -16,6 +17,7 @@ Eine moderne Flask-Web-App mit HTML/CSS für Stundenplan-Verwaltung, Wetter-Anze
 - Übersicht kommender Prüfungen (14 Tage)
 - Automatische Erkennung von Prüfungen
 - **Besondere Ereignisse**: Ausgefallene Lektionen, Raumwechsel, etc.
+- Farbcodierte Badges für verschiedene Event-Typen
 
 ### 🌦️ Wetter für Romanshorn
 - Aktuelle Temperatur und Wetterbeschreibung
@@ -23,19 +25,24 @@ Eine moderne Flask-Web-App mit HTML/CSS für Stundenplan-Verwaltung, Wetter-Anze
 - Luftfeuchtigkeit
 - Windgeschwindigkeit
 - Integration mit OpenWeather API
+- **Animiertes Wetter-Icon** (schwebendes Element)
 
 ### 🔍 Multi-Search
 Suchfeld mit direkten Links zu:
-- Google
-- ChatGPT
-- GitHub
-- Brave Search
+- Google (mit Gradient-Button)
+- ChatGPT (grüner Gradient)
+- GitHub (dunkler Gradient)
+- Brave Search (oranger Gradient)
+- **Ripple-Effekt** beim Klicken
+- Enter-Taste unterstützt
 
 ### 📔 OneNote Integration
 Schnellzugriff-Buttons für:
 - Schule-Notizbuch
 - Persönliches Notizbuch
 - Projekte-Notizbuch
+- **Slide-Animation** beim Hover
+- Direkter Start der Desktop-App
 
 ## Installation
 
@@ -113,17 +120,26 @@ Die Daten werden alle 5 Minuten automatisch aktualisiert.
 Bearbeiten Sie die Datei `static/js/main.js` und ersetzen Sie die Platzhalter-URLs:
 
 ```javascript
-const links = {
-    'school': 'onenote:https://ihre-onenote-url/school-notebook',
-    'personal': 'onenote:https://ihre-onenote-url/personal-notebook',
-    'projects': 'onenote:https://ihre-onenote-url/projects-notebook'
+const oneNoteLinks = {
+    'Mathematik': 'onenote:https://d.docs.live.net/xxx/Mathematik',
+    'Deutsch': 'onenote:https://d.docs.live.net/xxx/Deutsch',
+    'Englisch': 'onenote:https://d.docs.live.net/xxx/Englisch',
+    // ... weitere Fächer
+    'default': {
+        'school': 'onenote:https://d.docs.live.net/xxx/Schule',
+        'personal': 'onenote:https://d.docs.live.net/xxx/Persönlich',
+        'projects': 'onenote:https://d.docs.live.net/xxx/Projekte'
+    }
 };
 ```
 
 **OneNote-URLs finden:**
-1. Öffnen Sie OneNote
+1. Öffnen Sie OneNote Desktop-App
 2. Rechtsklick auf ein Notizbuch → "Link zum Notizbuch kopieren"
-3. Fügen Sie den Link in die Konfiguration ein
+3. Der Link hat das Format: `onenote:https://d.docs.live.net/...`
+4. Fügen Sie den Link in die Konfiguration ein
+
+**Hinweis:** Die OneNote-Links funktionieren nur mit der installierten OneNote Desktop-App.
 
 ## Projektstruktur
 
@@ -205,6 +221,14 @@ Bearbeiten Sie `app.py` und ändern Sie die Koordinaten:
 # Romanshorn coordinates
 lat = 47.5661
 lon = 9.3789
+```
+
+### KSR-Stundenplan-URL anpassen
+
+Wenn Sie eine andere KSR-Stundenplan-URL verwenden möchten, ändern Sie in `app.py`:
+
+```python
+app.config['ICS_URL'] = 'https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/IHRE_ID_HIER/timetable.ics'
 ```
 
 ## Fehlerbehebung
