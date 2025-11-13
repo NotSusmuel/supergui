@@ -10,10 +10,12 @@ Eine moderne Flask-Web-App mit HTML/CSS für Stundenplan-Verwaltung, Wetter-Anze
 - Deutsches Datumsformat
 
 ### 📅 Stundenplan-Verwaltung
-- ICS-Datei Upload für Stundenplan
-- Anzeige der nächsten Lektion
+- **Automatische Aktualisierung** von KSR-Stundenplan-API
+- ICS-Datei Upload als Fallback
+- Anzeige der nächsten Lektion mit **Raum** und Fach
 - Übersicht kommender Prüfungen (14 Tage)
 - Automatische Erkennung von Prüfungen
+- **Besondere Ereignisse**: Ausgefallene Lektionen, Raumwechsel, etc.
 
 ### 🌦️ Wetter für Romanshorn
 - Aktuelle Temperatur und Wetterbeschreibung
@@ -90,7 +92,16 @@ Die Anwendung läuft jetzt auf `http://localhost:5000`
 
 ## Verwendung
 
-### Stundenplan hochladen
+### Automatischer Stundenplan
+
+Der Stundenplan wird automatisch von der KSR-API geladen:
+```
+https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/dmbphs0g5i58gpwo7fxkja/timetable.ics
+```
+
+Die Daten werden alle 5 Minuten automatisch aktualisiert.
+
+### Stundenplan manuell hochladen (Fallback)
 
 1. Exportieren Sie Ihren Stundenplan als ICS-Datei (z.B. aus Google Calendar, Outlook, etc.)
 2. Klicken Sie auf "ICS-Datei hochladen"
@@ -162,10 +173,14 @@ ICS-Datei hochladen
 
 ## Design
 
-- Modernes dunkles Design mit Farbverläufen
+- **Super modernes dunkles Design** mit Farbverläufen
+- **Glassmorphismus-Effekte** mit Backdrop-Blur
+- **Flüssige Animationen** und Übergänge
+- **Abgerundete Buttons** mit Hover-Effekten
+- **Glühende Elemente** (Clock, Cards)
 - Responsive Layout (Desktop, Tablet, Mobile)
-- Animationen und Hover-Effekte
-- Glassmorphismus-Elemente
+- Animierte Hintergründe
+- Smooth Scroll und Transitions
 
 ## Anpassung
 

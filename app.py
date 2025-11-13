@@ -9,15 +9,25 @@ from pathlib import Path
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
+app.config['ICS_URL'] = 'https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/dmbphs0g5i58gpwo7fxkja/timetable.ics'
 
 # Ensure upload folder exists
 Path(app.config['UPLOAD_FOLDER']).mkdir(exist_ok=True)
 
-def parse_ics_file(filepath):
-    """Parse ICS file and extract events"""
+def fetch_ics_from_url(url):
+    """Fetch ICS file from URL"""
     try:
-        with open(filepath, 'rb') as f:
-            cal = Calendar.from_ical(f.read())
+        response = requests.get(url, timeout=10)
+        response.raise_for_status()
+        return response.content
+    except Exception as e:
+        print(f"Error fetching ICS from URL: {e}")
+        return None
+
+def parse_ics_content(ics_content):
+    """Parse ICS content and extract events"""
+    try:
+        cal = Calendar.from_ical(ics_content)
         
         events = []
         now = datetime.now(pytz.UTC)
@@ -28,6 +38,7 @@ def parse_ics_file(filepath):
                 dtstart = component.get('dtstart')
                 dtend = component.get('dtend')
                 description = str(component.get('description', ''))
+                location = str(component.get('location', ''))
                 
                 if dtstart:
                     start_dt = dtstart.dt
@@ -53,19 +64,43 @@ def parse_ics_file(filepath):
                     # Check if it's an exam based on keywords
                     is_exam = any(keyword in summary.lower() for keyword in ['prüfung', 'exam', 'test', 'klausur'])
                     
+                    # Check for special events (cancelled, etc.)
+                    is_cancelled = any(keyword in summary.lower() or keyword in description.lower() 
+                                     for keyword in ['ausgefallen', 'cancelled', 'abgesagt', 'entfällt'])
+                    
+                    special_note = ''
+                    if is_cancelled:
+                        special_note = 'Ausgefallen'
+                    elif 'verschoben' in summary.lower() or 'verschoben' in description.lower():
+                        special_note = 'Verschoben'
+                    elif 'raumwechsel' in summary.lower() or 'raumwechsel' in description.lower():
+                        special_note = 'Raumwechsel'
+                    
                     events.append({
                         'summary': summary,
                         'start': start_dt,
                         'end': end_dt,
                         'description': description,
-                        'is_exam': is_exam
+                        'location': location,
+                        'is_exam': is_exam,
+                        'is_cancelled': is_cancelled,
+                        'special_note': special_note
                     })
         
         # Sort events by start time
         events.sort(key=lambda x: x['start'])
         return events
     except Exception as e:
-        print(f"Error parsing ICS file: {e}")
+        print(f"Error parsing ICS content: {e}")
+        return []
+
+def parse_ics_file(filepath):
+    """Parse ICS file and extract events"""
+    try:
+        with open(filepath, 'rb') as f:
+            return parse_ics_content(f.read())
+    except Exception as e:
+        print(f"Error reading ICS file: {e}")
         return []
 
 def get_next_lesson(events):
@@ -94,18 +129,24 @@ def index():
 @app.route('/api/timetable')
 def get_timetable():
     """API endpoint to get timetable data"""
-    # Look for ICS files in uploads folder
-    ics_files = list(Path(app.config['UPLOAD_FOLDER']).glob('*.ics'))
+    # First, try to fetch from URL
+    ics_content = fetch_ics_from_url(app.config['ICS_URL'])
     
-    if not ics_files:
-        return jsonify({
-            'next_lesson': None,
-            'exams': [],
-            'message': 'No ICS file found. Please upload a timetable file.'
-        })
-    
-    # Use the first ICS file found
-    events = parse_ics_file(ics_files[0])
+    if ics_content:
+        events = parse_ics_content(ics_content)
+    else:
+        # Fallback to local file
+        ics_files = list(Path(app.config['UPLOAD_FOLDER']).glob('*.ics'))
+        
+        if not ics_files:
+            return jsonify({
+                'next_lesson': None,
+                'exams': [],
+                'message': 'Keine Stundenplan-Daten verfügbar. Automatische Aktualisierung fehlgeschlagen.'
+            })
+        
+        # Use the first ICS file found
+        events = parse_ics_file(ics_files[0])
     
     next_lesson = get_next_lesson(events)
     exams = get_upcoming_exams(events)
@@ -117,7 +158,10 @@ def get_timetable():
             'summary': next_lesson['summary'],
             'start': next_lesson['start'].isoformat(),
             'end': next_lesson['end'].isoformat() if next_lesson['end'] else None,
-            'description': next_lesson['description']
+            'description': next_lesson['description'],
+            'location': next_lesson['location'],
+            'is_cancelled': next_lesson['is_cancelled'],
+            'special_note': next_lesson['special_note']
         }
     
     exams_data = []
@@ -126,7 +170,9 @@ def get_timetable():
             'summary': exam['summary'],
             'start': exam['start'].isoformat(),
             'end': exam['end'].isoformat() if exam['end'] else None,
-            'description': exam['description']
+            'description': exam['description'],
+            'location': exam['location'],
+            'special_note': exam['special_note']
         })
     
     return jsonify({

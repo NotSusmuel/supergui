@@ -68,21 +68,41 @@ document.addEventListener('DOMContentLoaded', function() {
 });
 
 // OneNote Functions
-function openOneNote(type) {
-    // These URLs should be configured by the user
-    // For now, we'll show an alert with instructions
-    const links = {
+const oneNoteLinks = {
+    'Mathematik': 'onenote:https://example.com/math-notebook',
+    'Deutsch': 'onenote:https://example.com/german-notebook',
+    'Englisch': 'onenote:https://example.com/english-notebook',
+    'Physik': 'onenote:https://example.com/physics-notebook',
+    'Chemie': 'onenote:https://example.com/chemistry-notebook',
+    'Biologie': 'onenote:https://example.com/biology-notebook',
+    'Geschichte': 'onenote:https://example.com/history-notebook',
+    'Geographie': 'onenote:https://example.com/geography-notebook',
+    'Informatik': 'onenote:https://example.com/cs-notebook',
+    'default': {
         'school': 'onenote:https://example.com/school-notebook',
         'personal': 'onenote:https://example.com/personal-notebook',
         'projects': 'onenote:https://example.com/projects-notebook'
-    };
+    }
+};
+
+function updateOneNoteLinks(subject) {
+    // This function could dynamically update OneNote button text or links
+    // based on the current subject
+    console.log('Current subject:', subject);
+}
+
+function openOneNote(type) {
+    // Check if it's a direct subject link or a default category
+    let link = oneNoteLinks.default[type];
     
-    // Try to open OneNote URL
-    // Note: Users need to configure their actual OneNote URLs
-    alert(`OneNote Link für "${type}" würde hier geöffnet.\n\nBitte konfigurieren Sie Ihre OneNote-Links in der JavaScript-Datei (main.js).`);
-    
-    // Uncomment and configure when you have actual OneNote links:
-    // window.open(links[type], '_blank');
+    if (link) {
+        // For actual OneNote links, use the onenote: protocol
+        // Note: This requires OneNote to be installed on the desktop
+        window.location.href = link;
+        
+        // Alternatively, show a message with configuration instructions
+        // alert(`OneNote Link für "${type}" würde hier geöffnet.\n\nBitte konfigurieren Sie Ihre OneNote-Links in der JavaScript-Datei (main.js).`);
+    }
 }
 
 // Load Timetable Data
@@ -103,11 +123,42 @@ async function loadTimetable() {
             
             const timeString = formatDateTime(startDate, endDate);
             
+            // Extract subject from summary (usually before any special characters)
+            const subject = lesson.summary.split(/[-–]/)[0].trim();
+            
+            let specialBadge = '';
+            if (lesson.special_note) {
+                let badgeClass = 'cancelled';
+                if (lesson.special_note.includes('Verschoben')) {
+                    badgeClass = 'moved';
+                } else if (lesson.special_note.includes('Raumwechsel')) {
+                    badgeClass = 'room-change';
+                }
+                specialBadge = `<span class="special-badge ${badgeClass}">${lesson.special_note}</span>`;
+            }
+            
+            const locationHtml = lesson.location ? 
+                `<div class="lesson-location">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                    </svg>
+                    ${lesson.location}
+                </div>` : '';
+            
+            const cancelledClass = lesson.is_cancelled ? 'cancelled' : '';
+            
             nextLessonDiv.innerHTML = `
-                <div class="lesson-title">${lesson.summary}</div>
-                <div class="lesson-time">${timeString}</div>
-                ${lesson.description ? `<div class="lesson-description">${lesson.description}</div>` : ''}
+                <div class="lesson-info ${cancelledClass}">
+                    <div class="lesson-title">${lesson.summary}</div>
+                    ${locationHtml}
+                    <div class="lesson-time">${timeString}</div>
+                    ${lesson.description ? `<div class="lesson-description">${lesson.description}</div>` : ''}
+                    ${specialBadge}
+                </div>
             `;
+            
+            // Update OneNote buttons based on subject
+            updateOneNoteLinks(subject);
         } else {
             nextLessonDiv.innerHTML = `<p class="no-data">Keine kommenden Lektionen gefunden.</p>`;
         }
@@ -121,11 +172,30 @@ async function loadTimetable() {
                 const endDate = exam.end ? new Date(exam.end) : null;
                 const timeString = formatDateTime(startDate, endDate);
                 
+                const locationHtml = exam.location ? 
+                    `<div class="exam-location">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+                        </svg>
+                        ${exam.location}
+                    </div>` : '';
+                
+                let specialBadge = '';
+                if (exam.special_note) {
+                    let badgeClass = 'moved';
+                    if (exam.special_note.includes('Raumwechsel')) {
+                        badgeClass = 'room-change';
+                    }
+                    specialBadge = `<span class="special-badge ${badgeClass}">${exam.special_note}</span>`;
+                }
+                
                 return `
                     <div class="exam-item">
                         <div class="exam-title">${exam.summary}</div>
+                        ${locationHtml}
                         <div class="exam-time">${timeString}</div>
                         ${exam.description ? `<div class="exam-description">${exam.description}</div>` : ''}
+                        ${specialBadge}
                     </div>
                 `;
             }).join('');
