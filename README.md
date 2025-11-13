@@ -252,10 +252,12 @@ app.run(debug=True, host='0.0.0.0', port=5001)
 
 ## Sicherheitshinweise
 
-- API-Keys niemals in den Code committen
-- Verwenden Sie `.env` Dateien für sensible Daten
-- Setzen Sie `debug=False` in Produktionsumgebungen
-- Verwenden Sie einen Production-Server (z.B. Gunicorn) statt Flask Development Server
+- ⚠️ API-Keys niemals in den Code committen
+- ⚠️ Verwenden Sie `.env` Dateien für sensible Daten
+- ⚠️ Setzen Sie `FLASK_ENV=production` in Produktionsumgebungen
+- ⚠️ Verwenden Sie einen Production-Server (z.B. Gunicorn) statt Flask Development Server
+- ⚠️ Aktivieren Sie HTTPS in Produktionsumgebungen
+- ⚠️ Begrenzen Sie den Zugriff auf Upload-Endpoints
 
 ## Lizenz
 

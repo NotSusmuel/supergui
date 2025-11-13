@@ -214,9 +214,10 @@ def get_weather():
         return jsonify(weather_data)
     
     except requests.exceptions.RequestException as e:
+        # Don't expose detailed error messages in production
         return jsonify({
             'error': 'Failed to fetch weather data',
-            'message': str(e)
+            'message': 'Unable to connect to weather service. Please check your API key and internet connection.'
         }), 500
 
 @app.route('/upload', methods=['POST'])
@@ -244,4 +245,7 @@ def upload_file():
     return jsonify({'error': 'Invalid file type. Please upload an ICS file.'}), 400
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    # Use environment variable to control debug mode
+    # In production, set FLASK_ENV=production
+    debug_mode = os.environ.get('FLASK_ENV', 'production') != 'production'
+    app.run(debug=debug_mode, host='0.0.0.0', port=5000)
