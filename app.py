@@ -18,6 +18,36 @@ app.config['ICS_URL'] = 'https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/dmbphs
 # Ensure upload folder exists
 Path(app.config['UPLOAD_FOLDER']).mkdir(exist_ok=True)
 
+# Subject abbreviation mapping
+SUBJECT_MAPPING = {
+    'IF': 'Informatik',
+    'F': 'Französisch',
+    'MU': 'Musik',
+    'M': 'Mathematik',
+    'D': 'Deutsch',
+    'WR': 'Wirtschaft und Recht',
+    'SP05': 'Sport',
+    'BG08': 'Bildnerisches Gestalten',
+    'E': 'Englisch',
+    'GG': 'Geografie',
+    'BIO': 'Biologie',
+    'BIO1': 'Biologie',
+    'G': 'Geschichte',
+    'CH': 'Chemie',
+    'CH1': 'Chemie',
+    # Legacy mappings for sample data
+    'MA': 'Mathematik',
+    'DE': 'Deutsch',
+    'EN': 'Englisch',
+    'PH': 'Physik',
+    'IN': 'Informatik'
+}
+
+def get_subject_name(abbreviation):
+    """Convert subject abbreviation to full name"""
+    return SUBJECT_MAPPING.get(abbreviation, abbreviation)
+
+
 def fetch_ics_from_url(url):
     """Fetch ICS file from URL"""
     try:
@@ -45,13 +75,32 @@ def parse_ics_content(ics_content):
                 description = str(component.get('description', ''))
                 location = str(component.get('location', ''))
                 
+                # Parse KSR format: "SUBJECT TEACHER CLASS ROOM"
+                # Example: "GG klk 1Mf P1.09" = Geografie, teacher klk, class 1Mf, room P1.09
+                subject_display = summary  # Default to full summary
+                
                 # Extract room from SUMMARY if LOCATION is empty
-                # KSR format: "Subject klk Class ROOM" where ROOM is like HL3.01, HR3.06, P1.09, etc.
                 if not location and summary:
                     # Match KSR room format: 1-2 letters followed by digit(s).digit(s)
                     room_match = re.search(r'\b([A-Z]{1,2}\d+\.\d{2})\b', summary)
                     if room_match:
                         location = room_match.group(1)
+                
+                # Extract subject abbreviation (first word before any lowercase letters)
+                # Format: "SUBJECT teacher class ROOM" or "SUBJECT class ROOM"
+                parts = summary.split()
+                if len(parts) > 0:
+                    # First part is usually the subject abbreviation (uppercase)
+                    subject_abbr = parts[0]
+                    
+                    # Get full subject name
+                    subject_name = get_subject_name(subject_abbr)
+                    
+                    # Build display name: "Subject (Room)" or just "Subject" if no room
+                    if location:
+                        subject_display = f"{subject_name} ({location})"
+                    else:
+                        subject_display = subject_name
                 
                 if dtstart:
                     start_dt = dtstart.dt
@@ -75,11 +124,11 @@ def parse_ics_content(ics_content):
                             end_dt = pytz.UTC.localize(end_dt)
                     
                     # Check if it's an exam:
-                    # - Look for "(Prüfung)" at the end of SUMMARY
-                    # - Or look for "klk" (Klausur) in SUMMARY
-                    is_exam = (summary.strip().endswith('(Prüfung)') or 
-                              ' klk ' in summary or 
-                              summary.startswith('klk '))
+                    # - Look for "(Prüfung)" or "Prüfung" in SUMMARY or DESCRIPTION
+                    # - Note: teacher abbreviations like "klk" are NOT exam indicators
+                    is_exam = ('prüfung' in summary.lower() or 
+                              'prüfung' in description.lower() or
+                              summary.strip().endswith('(Prüfung)'))
                     
                     # Check for special events (cancelled, etc.)
                     is_cancelled = any(keyword in summary.lower() or keyword in description.lower() 
@@ -94,7 +143,8 @@ def parse_ics_content(ics_content):
                         special_note = 'Raumwechsel'
                     
                     events.append({
-                        'summary': summary,
+                        'summary': subject_display,
+                        'original_summary': summary,  # Keep original for reference
                         'start': start_dt,
                         'end': end_dt,
                         'description': description,
