@@ -5,6 +5,10 @@ from icalendar import Calendar
 import requests
 import os
 from pathlib import Path
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -61,8 +65,8 @@ def parse_ics_content(ics_content):
                             end_dt = datetime.combine(end_dt, datetime.min.time())
                             end_dt = pytz.UTC.localize(end_dt)
                     
-                    # Check if it's an exam based on keywords
-                    is_exam = any(keyword in summary.lower() for keyword in ['prüfung', 'exam', 'test', 'klausur'])
+                    # Check if it's an exam by looking for "(Prüfung)" at the end of the SUMMARY
+                    is_exam = summary.strip().endswith('(Prüfung)')
                     
                     # Check for special events (cancelled, etc.)
                     is_cancelled = any(keyword in summary.lower() or keyword in description.lower() 

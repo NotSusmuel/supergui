@@ -259,47 +259,6 @@ async function loadWeather() {
     }
 }
 
-// Upload ICS File
-async function uploadICS() {
-    const fileInput = document.getElementById('icsFile');
-    const file = fileInput.files[0];
-    
-    if (!file) {
-        return;
-    }
-    
-    if (!file.name.endsWith('.ics')) {
-        alert('Bitte wählen Sie eine ICS-Datei aus.');
-        return;
-    }
-    
-    const formData = new FormData();
-    formData.append('file', file);
-    
-    try {
-        const response = await fetch('/upload', {
-            method: 'POST',
-            body: formData
-        });
-        
-        const data = await response.json();
-        
-        if (response.ok) {
-            alert('ICS-Datei erfolgreich hochgeladen!');
-            // Reload timetable data
-            loadTimetable();
-        } else {
-            alert(`Fehler: ${data.error}`);
-        }
-    } catch (error) {
-        console.error('Error uploading file:', error);
-        alert('Fehler beim Hochladen der Datei.');
-    }
-    
-    // Clear file input
-    fileInput.value = '';
-}
-
 // Helper function to format date/time
 function formatDateTime(startDate, endDate) {
     const dateOptions = { 

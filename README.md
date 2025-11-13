@@ -77,17 +77,21 @@ pip install -r requirements.txt
 
 ### Schritt 4: Umgebungsvariablen konfigurieren
 
-Erstellen Sie eine `.env` Datei im Hauptverzeichnis:
+Kopieren Sie die Beispiel-Umgebungsvariablen-Datei:
 
-```env
-OPENWEATHER_API_KEY=ihr_api_schlüssel_hier
+```bash
+cp .env.example .env
 ```
 
-**OpenWeather API Key erhalten:**
+Die `.env.example` Datei enthält bereits einen funktionierenden API-Schlüssel für OpenWeather.
+
+**Für eigenen API Key (optional):**
 1. Registrieren Sie sich auf [OpenWeatherMap](https://openweathermap.org/)
 2. Gehen Sie zu [API Keys](https://home.openweathermap.org/api_keys)
 3. Erstellen Sie einen neuen API Key (kostenlos)
-4. Fügen Sie den Key in die `.env` Datei ein
+4. Ersetzen Sie den Key in der `.env` Datei
+
+**Hinweis:** Der vorhandene API-Schlüssel in `.env.example` funktioniert und muss nicht geändert werden.
 
 ### Schritt 5: Anwendung starten
 
@@ -101,19 +105,17 @@ Die Anwendung läuft jetzt auf `http://localhost:5000`
 
 ### Automatischer Stundenplan
 
-Der Stundenplan wird automatisch von der KSR-API geladen:
+Der Stundenplan wird **automatisch** von der KSR-API geladen:
 ```
 https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/dmbphs0g5i58gpwo7fxkja/timetable.ics
 ```
 
-Die Daten werden alle 5 Minuten automatisch aktualisiert.
+**Keine manuelle Aktion erforderlich!** Die Daten werden:
+- ✅ Beim Laden der Seite automatisch abgerufen
+- ✅ Alle 5 Minuten automatisch aktualisiert
+- ✅ Prüfungen werden erkannt durch "(Prüfung)" am Ende des Titels
 
-### Stundenplan manuell hochladen (Fallback)
-
-1. Exportieren Sie Ihren Stundenplan als ICS-Datei (z.B. aus Google Calendar, Outlook, etc.)
-2. Klicken Sie auf "ICS-Datei hochladen"
-3. Wählen Sie Ihre ICS-Datei aus
-4. Der Stundenplan wird automatisch geladen
+**Hinweis:** Falls die automatische Synchronisation nicht funktioniert (z.B. Netzwerkprobleme), wird eine entsprechende Meldung angezeigt.
 
 ### OneNote-Links konfigurieren
 
