@@ -67,6 +67,14 @@
                         <p class="loading">Lade...</p>
                     </div>
                 </section>
+
+                <!-- Weather Section -->
+                <section class="weather-section card">
+                    <h2>Wetter Romanshorn</h2>
+                    <div id="weatherContent" class="weather-content">
+                        <p class="loading">Lade Wetterdaten...</p>
+                    </div>
+                </section>
             </div>
 
             <!-- Right Column -->
@@ -74,27 +82,6 @@
                 <!-- Timetable Section -->
                 <section class="timetable-section card">
                     <h2>Stundenplan</h2>
-                    <div class="sync-mode-toggle">
-                        <label class="toggle-label">
-                            <input type="checkbox" id="autoSyncToggle" checked>
-                            <span class="toggle-slider"></span>
-                            <span class="toggle-text">
-                                <span class="auto-text">Automatisch (unstabil)</span>
-                                <span class="manual-text">Manuell</span>
-                            </span>
-                        </label>
-                    </div>
-                    
-                    <div id="uploadSection" class="upload-section" style="display: none;">
-                        <input type="file" id="icsFileInput" accept=".ics,.csv" style="display: none;">
-                        <button class="upload-btn" onclick="document.getElementById('icsFileInput').click()">
-                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
-                            </svg>
-                            Stundenplan hochladen
-                        </button>
-                        <p class="upload-hint">Lade deine timetable.ics oder timetable.csv Datei hoch</p>
-                    </div>
                     
                     <div id="autoSyncInfo" class="auto-sync-info">
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" class="sync-icon">
@@ -124,14 +111,6 @@
                                 <p class="loading">Lade Prüfungen...</p>
                             </div>
                         </div>
-                    </div>
-                </section>
-
-                <!-- Weather Section -->
-                <section class="weather-section card">
-                    <h2>Wetter Romanshorn</h2>
-                    <div id="weatherContent" class="weather-content">
-                        <p class="loading">Lade Wetterdaten...</p>
                     </div>
                 </section>
             </div>

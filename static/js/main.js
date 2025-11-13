@@ -119,11 +119,8 @@ function updateCurrentNotebook(currentLesson) {
 // Load Timetable Data
 async function loadTimetable() {
     try {
-        // Get current mode
-        const isAutoMode = document.getElementById('autoSyncToggle').checked;
-        const mode = isAutoMode ? 'auto' : 'manual';
-        
-        const response = await fetch(`/api/timetable?mode=${mode}`);
+        // Always use auto mode now (manual upload removed)
+        const response = await fetch(`/api/timetable?mode=auto`);
         const data = await response.json();
         
         // Update Current Lesson OneNote Link
@@ -164,14 +161,13 @@ async function loadTimetable() {
             const cancelledClass = lesson.is_cancelled ? 'cancelled' : '';
             
             nextLessonDiv.innerHTML = `
-                <div class="lesson-info ${cancelledClass}">
-                    <div class="lesson-title">${lesson.summary}</div>
-                    ${locationHtml}
-                    <div class="lesson-time">${timeString}</div>
-                    ${lesson.description ? `<div class="lesson-description">${lesson.description}</div>` : ''}
-                    ${specialBadge}
-                </div>
+                <div class="lesson-title">${lesson.summary}</div>
+                ${locationHtml}
+                <div class="lesson-time">${timeString}</div>
+                ${lesson.description ? `<div class="lesson-description">${lesson.description}</div>` : ''}
+                ${specialBadge}
             `;
+            nextLessonDiv.className = `lesson-info ${cancelledClass}`;
         } else {
             nextLessonDiv.innerHTML = `<p class="no-data">Keine kommenden Lektionen gefunden.</p>`;
         }
@@ -337,57 +333,6 @@ function formatDateTime(startISO, endISO) {
 document.addEventListener('DOMContentLoaded', function() {
     loadTimetable();
     loadWeather();
-    
-    // Toggle between auto and manual mode
-    const autoSyncToggle = document.getElementById('autoSyncToggle');
-    const uploadSection = document.getElementById('uploadSection');
-    const autoSyncInfo = document.getElementById('autoSyncInfo');
-    
-    autoSyncToggle.addEventListener('change', function() {
-        if (this.checked) {
-            // Auto mode
-            uploadSection.style.display = 'none';
-            autoSyncInfo.style.display = 'flex';
-        } else {
-            // Manual mode
-            uploadSection.style.display = 'block';
-            autoSyncInfo.style.display = 'none';
-        }
-        // Reload timetable with new mode
-        loadTimetable();
-    });
-    
-    // File upload handler
-    const icsFileInput = document.getElementById('icsFileInput');
-    icsFileInput.addEventListener('change', async function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-        
-        const formData = new FormData();
-        formData.append('file', file);
-        
-        try {
-            const response = await fetch('/upload', {
-                method: 'POST',
-                body: formData
-            });
-            
-            const result = await response.json();
-            
-            if (response.ok) {
-                alert('ICS-Datei erfolgreich hochgeladen!');
-                // Reload timetable
-                loadTimetable();
-            } else {
-                alert('Fehler: ' + (result.error || 'Upload fehlgeschlagen'));
-            }
-        } catch (error) {
-            alert('Fehler beim Hochladen der Datei: ' + error.message);
-        }
-        
-        // Reset file input
-        icsFileInput.value = '';
-    });
     
     // Refresh data periodically
     setInterval(loadTimetable, 5 * 60 * 1000); // Every 5 minutes

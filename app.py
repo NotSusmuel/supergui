@@ -166,6 +166,10 @@ def parse_csv_timetable(csv_path):
                 start_dt = datetime.strptime(start_datetime_str, "%m/%d/%Y %H:%M")
                 end_dt = datetime.strptime(end_datetime_str, "%m/%d/%Y %H:%M")
                 
+                # Add 1 hour to correct timezone issue (ICS times are 1 hour too early)
+                start_dt = start_dt + timedelta(hours=1)
+                end_dt = end_dt + timedelta(hours=1)
+                
                 # Localize to Zurich timezone
                 start_dt = zurich_tz.localize(start_dt)
                 end_dt = zurich_tz.localize(end_dt)
@@ -202,8 +206,11 @@ def parse_csv_timetable(csv_path):
                 # Check if it's an exam:
                 # - Look for "(Prüfung)" anywhere in SUMMARY or DESCRIPTION
                 # - Note: teacher abbreviations like "klk" are NOT exam indicators
-                is_exam = ('(prüfung)' in summary.lower() or 
-                          (description and '(prüfung)' in description.lower()))
+                # - Note: "Nachprüfung" does NOT count as exam
+                is_exam = (('(prüfung)' in summary.lower() or 
+                           (description and '(prüfung)' in description.lower())) and
+                          'nachprüfung' not in summary.lower() and
+                          (not description or 'nachprüfung' not in description.lower()))
                 
                 # Check for special events (cancelled, etc.)
                 is_cancelled = any(keyword in summary.lower() or (description and keyword in description.lower()) 
