@@ -1,1 +1,240 @@
-# supergui
+# SuperGUI - Flask Dashboard
+
+Eine moderne Flask-Web-App mit HTML/CSS für Stundenplan-Verwaltung, Wetter-Anzeige und Produktivitäts-Tools.
+
+## Features
+
+### 🕐 Echtzeit-Uhr
+- Moderne Anzeige mit Datum und Uhrzeit
+- Automatische Aktualisierung jede Sekunde
+- Deutsches Datumsformat
+
+### 📅 Stundenplan-Verwaltung
+- ICS-Datei Upload für Stundenplan
+- Anzeige der nächsten Lektion
+- Übersicht kommender Prüfungen (14 Tage)
+- Automatische Erkennung von Prüfungen
+
+### 🌦️ Wetter für Romanshorn
+- Aktuelle Temperatur und Wetterbeschreibung
+- Gefühlte Temperatur
+- Luftfeuchtigkeit
+- Windgeschwindigkeit
+- Integration mit OpenWeather API
+
+### 🔍 Multi-Search
+Suchfeld mit direkten Links zu:
+- Google
+- ChatGPT
+- GitHub
+- Brave Search
+
+### 📔 OneNote Integration
+Schnellzugriff-Buttons für:
+- Schule-Notizbuch
+- Persönliches Notizbuch
+- Projekte-Notizbuch
+
+## Installation
+
+### Voraussetzungen
+- Python 3.8 oder höher
+- pip (Python Package Manager)
+
+### Schritt 1: Repository klonen
+
+```bash
+git clone https://github.com/NotSusmuel/supergui.git
+cd supergui
+```
+
+### Schritt 2: Virtuelle Umgebung erstellen (empfohlen)
+
+```bash
+python -m venv venv
+
+# Windows
+venv\Scripts\activate
+
+# Linux/Mac
+source venv/bin/activate
+```
+
+### Schritt 3: Abhängigkeiten installieren
+
+```bash
+pip install -r requirements.txt
+```
+
+### Schritt 4: Umgebungsvariablen konfigurieren
+
+Erstellen Sie eine `.env` Datei im Hauptverzeichnis:
+
+```env
+OPENWEATHER_API_KEY=ihr_api_schlüssel_hier
+```
+
+**OpenWeather API Key erhalten:**
+1. Registrieren Sie sich auf [OpenWeatherMap](https://openweathermap.org/)
+2. Gehen Sie zu [API Keys](https://home.openweathermap.org/api_keys)
+3. Erstellen Sie einen neuen API Key (kostenlos)
+4. Fügen Sie den Key in die `.env` Datei ein
+
+### Schritt 5: Anwendung starten
+
+```bash
+python app.py
+```
+
+Die Anwendung läuft jetzt auf `http://localhost:5000`
+
+## Verwendung
+
+### Stundenplan hochladen
+
+1. Exportieren Sie Ihren Stundenplan als ICS-Datei (z.B. aus Google Calendar, Outlook, etc.)
+2. Klicken Sie auf "ICS-Datei hochladen"
+3. Wählen Sie Ihre ICS-Datei aus
+4. Der Stundenplan wird automatisch geladen
+
+### OneNote-Links konfigurieren
+
+Bearbeiten Sie die Datei `static/js/main.js` und ersetzen Sie die Platzhalter-URLs:
+
+```javascript
+const links = {
+    'school': 'onenote:https://ihre-onenote-url/school-notebook',
+    'personal': 'onenote:https://ihre-onenote-url/personal-notebook',
+    'projects': 'onenote:https://ihre-onenote-url/projects-notebook'
+};
+```
+
+**OneNote-URLs finden:**
+1. Öffnen Sie OneNote
+2. Rechtsklick auf ein Notizbuch → "Link zum Notizbuch kopieren"
+3. Fügen Sie den Link in die Konfiguration ein
+
+## Projektstruktur
+
+```
+supergui/
+├── app.py                  # Haupt-Flask-Anwendung
+├── requirements.txt        # Python-Abhängigkeiten
+├── README.md              # Diese Datei
+├── .gitignore             # Git-Ignore-Datei
+├── templates/
+│   └── index.html         # HTML-Template
+├── static/
+│   ├── css/
+│   │   └── style.css      # Styling
+│   └── js/
+│       └── main.js        # JavaScript-Funktionen
+└── uploads/               # ICS-Dateien (wird erstellt)
+```
+
+## API-Endpunkte
+
+### `GET /`
+Haupt-Dashboard-Seite
+
+### `GET /api/timetable`
+Gibt Stundenplan-Daten zurück
+- Nächste Lektion
+- Kommende Prüfungen
+
+### `GET /api/weather`
+Gibt Wetterdaten für Romanshorn zurück
+
+### `POST /upload`
+ICS-Datei hochladen
+- Parameter: `file` (ICS-Datei)
+
+## Technologien
+
+- **Backend:** Flask (Python 3.8+)
+- **Frontend:** HTML5, CSS3, Vanilla JavaScript
+- **APIs:** OpenWeather API
+- **Bibliotheken:**
+  - icalendar: ICS-Datei-Parsing
+  - requests: HTTP-Anfragen
+  - python-dateutil: Datum/Zeit-Verwaltung
+  - pytz: Zeitzone-Unterstützung
+
+## Design
+
+- Modernes dunkles Design mit Farbverläufen
+- Responsive Layout (Desktop, Tablet, Mobile)
+- Animationen und Hover-Effekte
+- Glassmorphismus-Elemente
+
+## Anpassung
+
+### Farben ändern
+
+Bearbeiten Sie die CSS-Variablen in `static/css/style.css`:
+
+```css
+:root {
+    --primary-color: #6366f1;
+    --secondary-color: #8b5cf6;
+    --background: #0f172a;
+    /* ... weitere Variablen */
+}
+```
+
+### Wetter-Standort ändern
+
+Bearbeiten Sie `app.py` und ändern Sie die Koordinaten:
+
+```python
+# Romanshorn coordinates
+lat = 47.5661
+lon = 9.3789
+```
+
+## Fehlerbehebung
+
+### Wetter wird nicht angezeigt
+- Überprüfen Sie, ob der OpenWeather API Key korrekt konfiguriert ist
+- Stellen Sie sicher, dass die `.env` Datei im Hauptverzeichnis liegt
+- Überprüfen Sie die Browser-Konsole auf Fehler
+
+### Stundenplan wird nicht geladen
+- Stellen Sie sicher, dass eine ICS-Datei hochgeladen wurde
+- Überprüfen Sie, ob die ICS-Datei gültig ist
+- Schauen Sie in die Terminal-Ausgabe für Fehler
+
+### Port 5000 bereits belegt
+Ändern Sie den Port in `app.py`:
+
+```python
+app.run(debug=True, host='0.0.0.0', port=5001)
+```
+
+## Sicherheitshinweise
+
+- API-Keys niemals in den Code committen
+- Verwenden Sie `.env` Dateien für sensible Daten
+- Setzen Sie `debug=False` in Produktionsumgebungen
+- Verwenden Sie einen Production-Server (z.B. Gunicorn) statt Flask Development Server
+
+## Lizenz
+
+Dieses Projekt steht unter der MIT-Lizenz.
+
+## Autor
+
+NotSusmuel
+
+## Beitragen
+
+Pull Requests sind willkommen! Für größere Änderungen öffnen Sie bitte zuerst ein Issue.
+
+## Roadmap
+
+- [ ] Benutzer-Authentifizierung
+- [ ] Mehrere Stundenpläne
+- [ ] Notifications für Prüfungen
+- [ ] Kalender-Synchronisation
+- [ ] Dunkelmodus-Toggle
+- [ ] Mehrsprachigkeit
