@@ -67,42 +67,53 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 
-// OneNote Functions
-const oneNoteLinks = {
-    'Mathematik': 'onenote:https://example.com/math-notebook',
-    'Deutsch': 'onenote:https://example.com/german-notebook',
-    'Englisch': 'onenote:https://example.com/english-notebook',
-    'Physik': 'onenote:https://example.com/physics-notebook',
-    'Chemie': 'onenote:https://example.com/chemistry-notebook',
-    'Biologie': 'onenote:https://example.com/biology-notebook',
-    'Geschichte': 'onenote:https://example.com/history-notebook',
-    'Geographie': 'onenote:https://example.com/geography-notebook',
-    'Informatik': 'onenote:https://example.com/cs-notebook',
-    'default': {
-        'school': 'onenote:https://example.com/school-notebook',
-        'personal': 'onenote:https://example.com/personal-notebook',
-        'projects': 'onenote:https://example.com/projects-notebook'
-    }
-};
-
-function updateOneNoteLinks(subject) {
-    // This function could dynamically update OneNote button text or links
-    // based on the current subject
-    console.log('Current subject:', subject);
-}
-
-function openOneNote(type) {
-    // Check if it's a direct subject link or a default category
-    let link = oneNoteLinks.default[type];
+// Update Current Lesson OneNote Link
+function updateCurrentNotebook(currentLesson) {
+    const notebookDiv = document.getElementById('currentNotebook');
     
-    if (link) {
-        // For actual OneNote links, use the onenote: protocol
-        // Note: This requires OneNote to be installed on the desktop
-        window.location.href = link;
-        
-        // Alternatively, show a message with configuration instructions
-        // alert(`OneNote Link für "${type}" würde hier geöffnet.\n\nBitte konfigurieren Sie Ihre OneNote-Links in der JavaScript-Datei (main.js).`);
+    if (!currentLesson) {
+        // No current lesson
+        notebookDiv.innerHTML = `
+            <div class="no-lesson">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                <p>Gerade kein Unterricht</p>
+            </div>
+        `;
+        return;
     }
+    
+    const subject = currentLesson.subject;
+    const onenoteLink = currentLesson.onenote_link;
+    
+    if (!onenoteLink) {
+        // No notebook for this subject
+        notebookDiv.innerHTML = `
+            <div class="no-notebook">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
+                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                </svg>
+                <p class="current-subject">${subject}</p>
+                <p class="no-notebook-text">Fach hat kein Notizbuch</p>
+            </div>
+        `;
+        return;
+    }
+    
+    // Has a notebook link
+    notebookDiv.innerHTML = `
+        <div class="has-notebook">
+            <p class="current-subject-small">Aktuelles Fach:</p>
+            <p class="current-subject">${subject}</p>
+            <button class="notebook-btn" onclick="window.location.href='${onenoteLink}'">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M22 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h17c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 17V7h3v10H7zm12 0h-9V7h9v10z"/>
+                </svg>
+                Notizbuch öffnen
+            </button>
+        </div>
+    `;
 }
 
 // Load Timetable Data
@@ -110,6 +121,9 @@ async function loadTimetable() {
     try {
         const response = await fetch('/api/timetable');
         const data = await response.json();
+        
+        // Update Current Lesson OneNote Link
+        updateCurrentNotebook(data.current_lesson);
         
         // Display next lesson
         const nextLessonDiv = document.getElementById('nextLesson');
@@ -154,9 +168,6 @@ async function loadTimetable() {
                     ${specialBadge}
                 </div>
             `;
-            
-            // Update OneNote buttons based on subject
-            updateOneNoteLinks(subject);
         } else {
             nextLessonDiv.innerHTML = `<p class="no-data">Keine kommenden Lektionen gefunden.</p>`;
         }

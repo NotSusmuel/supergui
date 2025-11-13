@@ -43,6 +43,22 @@ SUBJECT_MAPPING = {
     'IN': 'Informatik'
 }
 
+# OneNote notebook links for each subject
+ONENOTE_LINKS = {
+    'Französisch': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/Franais1-4Mfz25-29/SiteAssets/Fran%C3%A7ais%201-4Mfz%2025-29-Notizbuch',
+    'Chemie': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/Chemie_bshMfz2025-29/SiteAssets/Chemie_bsh%20Mfz%202025-29-Notizbuch',
+    'Mathematik': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/MathematikMfz2025-2029/SiteAssets/Mathematik%20Mfz%202025%20-%202029-Notizbuch',
+    'Wirtschaft und Recht': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/WRMfz2025-2026/SiteAssets/WR%20Mfz%202025-2026-Notizbuch',
+    'Geschichte': 'onenote:https://kantonsschuleromanshorn-my.sharepoint.com/personal/eng_ksr_ch/Documents/Kursnotizb%C3%BCcher/Geschichte%20Mfz%202025-2029',
+    'Biologie': 'onenote:https://kantonsschuleromanshorn-my.sharepoint.com/personal/sn_ksr_ch/Documents/Kursnotizb%C3%BCcher/Bio%20Mfz%202025-29',
+    'Englisch': 'onenote:https://kantonsschuleromanshorn-my.sharepoint.com/personal/wus_ksr_ch/Documents/Kursnotizb%C3%BCcher/Englisch%20Mf%202025-2029',
+    'Deutsch': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/DeutschMf2025-2029/SiteAssets/Deutsch%20Mf%202025-2029-Notizbuch',
+    'Informatik': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/InformatikMf2025-2029/SiteAssets/Informatik%20Mf%202025-2029-Notizbuch',
+    'Musik': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/MusicMf2025-2029/SiteAssets/Music%20Mf%202025-2029-Notizbuch',
+    'Geografie': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/GeographieMf2025-2029/SiteAssets/Geographie%20Mf%202025-2029-Notizbuch',
+    # Klassen-Team is general, not subject-specific
+}
+
 def get_subject_name(abbreviation):
     """Convert subject abbreviation to full name"""
     return SUBJECT_MAPPING.get(abbreviation, abbreviation)
@@ -195,6 +211,17 @@ def get_next_lesson(events):
     
     return None
 
+def get_current_lesson(events):
+    """Get the lesson that is currently happening (now between start and end time)"""
+    zurich_tz = pytz.timezone('Europe/Zurich')
+    now = datetime.now(zurich_tz)
+    
+    for event in events:
+        if event['start'] <= now <= event['end']:
+            return event
+    
+    return None
+
 def get_todays_lessons(events):
     """Get all lessons for today"""
     zurich_tz = pytz.timezone('Europe/Zurich')
@@ -247,6 +274,7 @@ def get_timetable():
         events = parse_ics_file(ics_files[0])
     
     next_lesson = get_next_lesson(events)
+    current_lesson = get_current_lesson(events)
     todays_lessons = get_todays_lessons(events)
     exams = get_upcoming_exams(events)
     
@@ -261,6 +289,22 @@ def get_timetable():
             'location': next_lesson['location'],
             'is_cancelled': next_lesson['is_cancelled'],
             'special_note': next_lesson['special_note']
+        }
+    
+    # Format current lesson data
+    current_lesson_data = None
+    if current_lesson:
+        # Extract subject name from summary (e.g., "Mathematik (HL3.01)" -> "Mathematik")
+        subject_name = current_lesson['summary'].split('(')[0].strip()
+        onenote_link = ONENOTE_LINKS.get(subject_name, None)
+        
+        current_lesson_data = {
+            'summary': current_lesson['summary'],
+            'subject': subject_name,
+            'start': current_lesson['start'].isoformat(),
+            'end': current_lesson['end'].isoformat() if current_lesson['end'] else None,
+            'location': current_lesson['location'],
+            'onenote_link': onenote_link
         }
     
     # Format today's lessons
@@ -289,6 +333,7 @@ def get_timetable():
     
     return jsonify({
         'next_lesson': next_lesson_data,
+        'current_lesson': current_lesson_data,
         'todays_lessons': todays_data,
         'exams': exams_data
     })
