@@ -31,6 +31,7 @@ def fetch_ics_from_url(url):
 def parse_ics_content(ics_content):
     """Parse ICS content and extract events"""
     try:
+        import re
         cal = Calendar.from_ical(ics_content)
         
         events = []
@@ -43,6 +44,14 @@ def parse_ics_content(ics_content):
                 dtend = component.get('dtend')
                 description = str(component.get('description', ''))
                 location = str(component.get('location', ''))
+                
+                # Extract room from SUMMARY if LOCATION is empty
+                # KSR format: "Subject klk Class ROOM" where ROOM is like HL3.01, HR3.06, P1.09, etc.
+                if not location and summary:
+                    # Match KSR room format: 1-2 letters followed by digit(s).digit(s)
+                    room_match = re.search(r'\b([A-Z]{1,2}\d+\.\d{2})\b', summary)
+                    if room_match:
+                        location = room_match.group(1)
                 
                 if dtstart:
                     start_dt = dtstart.dt
@@ -65,8 +74,12 @@ def parse_ics_content(ics_content):
                             end_dt = datetime.combine(end_dt, datetime.min.time())
                             end_dt = pytz.UTC.localize(end_dt)
                     
-                    # Check if it's an exam by looking for "(Prüfung)" at the end of the SUMMARY
-                    is_exam = summary.strip().endswith('(Prüfung)')
+                    # Check if it's an exam:
+                    # - Look for "(Prüfung)" at the end of SUMMARY
+                    # - Or look for "klk" (Klausur) in SUMMARY
+                    is_exam = (summary.strip().endswith('(Prüfung)') or 
+                              ' klk ' in summary or 
+                              summary.startswith('klk '))
                     
                     # Check for special events (cancelled, etc.)
                     is_cancelled = any(keyword in summary.lower() or keyword in description.lower() 
