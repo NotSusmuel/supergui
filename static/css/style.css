@@ -563,6 +563,68 @@ body::before {
     color: var(--text-primary);
 }
 
+/* Today's Lessons */
+.todays-lessons {
+    margin-top: 30px;
+    margin-bottom: 30px;
+}
+
+.todays-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.today-lesson-item {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    padding: 12px 16px;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(10px);
+    border-radius: 10px;
+    border-left: 3px solid var(--primary-color);
+    transition: var(--transition);
+}
+
+.today-lesson-item:hover {
+    transform: translateX(5px);
+    background: rgba(99, 102, 241, 0.1);
+    border-left-color: var(--accent-color);
+}
+
+.today-time {
+    font-size: 0.95rem;
+    font-weight: 600;
+    color: var(--primary-light);
+    min-width: 90px;
+    font-family: 'Courier New', monospace;
+}
+
+.today-subject {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    flex: 1;
+}
+
+.lesson-location-inline {
+    font-size: 0.85rem;
+    color: var(--text-secondary);
+    padding: 4px 10px;
+    background: rgba(99, 102, 241, 0.2);
+    border-radius: 6px;
+}
+
+.exam-badge-inline {
+    font-size: 0.8rem;
+    color: var(--warning);
+    padding: 4px 10px;
+    background: rgba(245, 158, 11, 0.2);
+    border-radius: 6px;
+    font-weight: 600;
+}
+
 /* Footer */
 .footer {
     text-align: center;

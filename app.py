@@ -104,31 +104,45 @@ def parse_ics_content(ics_content):
                 
                 if dtstart:
                     start_dt = dtstart.dt
-                    # Convert to datetime if it's a date
+                    # KSR ICS times have 'Z' suffix but are actually in local Zurich time, not UTC
+                    # So we need to interpret them as Europe/Zurich times directly
+                    zurich_tz = pytz.timezone('Europe/Zurich')
+                    
                     if isinstance(start_dt, datetime):
                         if start_dt.tzinfo is None:
-                            start_dt = pytz.UTC.localize(start_dt)
+                            # No timezone, treat as Zurich local time
+                            start_dt = zurich_tz.localize(start_dt)
+                        else:
+                            # Has timezone (UTC with Z), but it's actually local time
+                            # Remove the UTC timezone and re-interpret as Zurich time
+                            start_dt = start_dt.replace(tzinfo=None)
+                            start_dt = zurich_tz.localize(start_dt)
                     else:
-                        # It's a date, convert to datetime at midnight
+                        # It's a date, convert to datetime at midnight in Zurich timezone
                         start_dt = datetime.combine(start_dt, datetime.min.time())
-                        start_dt = pytz.UTC.localize(start_dt)
+                        start_dt = zurich_tz.localize(start_dt)
                     
                     end_dt = None
                     if dtend:
                         end_dt = dtend.dt
                         if isinstance(end_dt, datetime):
                             if end_dt.tzinfo is None:
-                                end_dt = pytz.UTC.localize(end_dt)
+                                # No timezone, treat as Zurich local time
+                                end_dt = zurich_tz.localize(end_dt)
+                            else:
+                                # Has timezone (UTC with Z), but it's actually local time
+                                # Remove the UTC timezone and re-interpret as Zurich time
+                                end_dt = end_dt.replace(tzinfo=None)
+                                end_dt = zurich_tz.localize(end_dt)
                         else:
                             end_dt = datetime.combine(end_dt, datetime.min.time())
-                            end_dt = pytz.UTC.localize(end_dt)
+                            end_dt = zurich_tz.localize(end_dt)
                     
                     # Check if it's an exam:
-                    # - Look for "(Prüfung)" or "Prüfung" in SUMMARY or DESCRIPTION
+                    # - Look for "(Prüfung)" anywhere in SUMMARY or DESCRIPTION
                     # - Note: teacher abbreviations like "klk" are NOT exam indicators
-                    is_exam = ('prüfung' in summary.lower() or 
-                              'prüfung' in description.lower() or
-                              summary.strip().endswith('(Prüfung)'))
+                    is_exam = ('(prüfung)' in summary.lower() or 
+                              '(prüfung)' in description.lower())
                     
                     # Check for special events (cancelled, etc.)
                     is_cancelled = any(keyword in summary.lower() or keyword in description.lower() 
@@ -172,7 +186,8 @@ def parse_ics_file(filepath):
 
 def get_next_lesson(events):
     """Get the next upcoming lesson"""
-    now = datetime.now(pytz.UTC)
+    zurich_tz = pytz.timezone('Europe/Zurich')
+    now = datetime.now(zurich_tz)
     
     for event in events:
         if event['start'] > now:
@@ -180,9 +195,25 @@ def get_next_lesson(events):
     
     return None
 
+def get_todays_lessons(events):
+    """Get all lessons for today"""
+    zurich_tz = pytz.timezone('Europe/Zurich')
+    now = datetime.now(zurich_tz)
+    today_str = now.strftime('%Y%m%d')
+    
+    todays = []
+    for event in events:
+        # Check if the event starts on the same day (compare YYYYMMDD format)
+        event_date_str = event['start'].strftime('%Y%m%d')
+        if event_date_str == today_str:
+            todays.append(event)
+    
+    return todays
+
 def get_upcoming_exams(events, days=14):
     """Get exams in the next specified days"""
-    now = datetime.now(pytz.UTC)
+    zurich_tz = pytz.timezone('Europe/Zurich')
+    now = datetime.now(zurich_tz)
     future = now + timedelta(days=days)
     
     exams = [e for e in events if e['is_exam'] and now <= e['start'] <= future]
@@ -216,6 +247,7 @@ def get_timetable():
         events = parse_ics_file(ics_files[0])
     
     next_lesson = get_next_lesson(events)
+    todays_lessons = get_todays_lessons(events)
     exams = get_upcoming_exams(events)
     
     # Format data for JSON response
@@ -225,11 +257,24 @@ def get_timetable():
             'summary': next_lesson['summary'],
             'start': next_lesson['start'].isoformat(),
             'end': next_lesson['end'].isoformat() if next_lesson['end'] else None,
-            'description': next_lesson['description'],
+            'description': next_lesson['description'] if next_lesson['description'] and next_lesson['description'] != 'None' else '',
             'location': next_lesson['location'],
             'is_cancelled': next_lesson['is_cancelled'],
             'special_note': next_lesson['special_note']
         }
+    
+    # Format today's lessons
+    todays_data = []
+    for lesson in todays_lessons:
+        todays_data.append({
+            'summary': lesson['summary'],
+            'start': lesson['start'].isoformat(),
+            'end': lesson['end'].isoformat() if lesson['end'] else None,
+            'description': lesson['description'] if lesson['description'] and lesson['description'] != 'None' else '',
+            'location': lesson['location'],
+            'is_exam': lesson['is_exam'],
+            'special_note': lesson['special_note']
+        })
     
     exams_data = []
     for exam in exams:
@@ -237,13 +282,14 @@ def get_timetable():
             'summary': exam['summary'],
             'start': exam['start'].isoformat(),
             'end': exam['end'].isoformat() if exam['end'] else None,
-            'description': exam['description'],
+            'description': exam['description'] if exam['description'] and exam['description'] != 'None' else '',
             'location': exam['location'],
             'special_note': exam['special_note']
         })
     
     return jsonify({
         'next_lesson': next_lesson_data,
+        'todays_lessons': todays_data,
         'exams': exams_data
     })
 

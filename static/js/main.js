@@ -118,10 +118,8 @@ async function loadTimetable() {
             nextLessonDiv.innerHTML = `<p class="no-data">${data.message}</p>`;
         } else if (data.next_lesson) {
             const lesson = data.next_lesson;
-            const startDate = new Date(lesson.start);
-            const endDate = lesson.end ? new Date(lesson.end) : null;
             
-            const timeString = formatDateTime(startDate, endDate);
+            const timeString = formatDateTime(lesson.start, lesson.end);
             
             // Extract subject from summary (usually before any special characters)
             const subject = lesson.summary.split(/[-–]/)[0].trim();
@@ -163,14 +161,41 @@ async function loadTimetable() {
             nextLessonDiv.innerHTML = `<p class="no-data">Keine kommenden Lektionen gefunden.</p>`;
         }
         
+        // Display today's lessons
+        const todaysListDiv = document.getElementById('todaysLessonsList');
+        
+        if (data.todays_lessons && data.todays_lessons.length > 0) {
+            todaysListDiv.innerHTML = data.todays_lessons.map(lesson => {
+                // Extract times directly from ISO strings
+                const startTime = extractTimeFromISO(lesson.start);
+                const endTime = lesson.end ? extractTimeFromISO(lesson.end) : '';
+                const timeString = endTime ? `${startTime} - ${endTime}` : startTime;
+                
+                const locationHtml = lesson.location ? 
+                    `<span class="lesson-location-inline">${lesson.location}</span>` : '';
+                
+                const examBadge = lesson.is_exam ? 
+                    `<span class="exam-badge-inline">(Prüfung)</span>` : '';
+                
+                return `
+                    <div class="today-lesson-item">
+                        <span class="today-time">${timeString}</span>
+                        <span class="today-subject">${lesson.summary}</span>
+                        ${locationHtml}
+                        ${examBadge}
+                    </div>
+                `;
+            }).join('');
+        } else {
+            todaysListDiv.innerHTML = `<p class="no-data">Keine Lektionen für heute.</p>`;
+        }
+        
         // Display exams
         const examsListDiv = document.getElementById('examsList');
         
         if (data.exams && data.exams.length > 0) {
             examsListDiv.innerHTML = data.exams.map(exam => {
-                const startDate = new Date(exam.start);
-                const endDate = exam.end ? new Date(exam.end) : null;
-                const timeString = formatDateTime(startDate, endDate);
+                const timeString = formatDateTime(exam.start, exam.end);
                 
                 const locationHtml = exam.location ? 
                     `<div class="exam-location">
@@ -259,24 +284,34 @@ async function loadWeather() {
     }
 }
 
-// Helper function to format date/time
-function formatDateTime(startDate, endDate) {
+// Helper function to extract time from ISO string without timezone conversion
+function extractTimeFromISO(isoString) {
+    // Extract time portion from ISO string like "2025-11-14T08:00:00+01:00"
+    // We want to keep the 08:00 part as-is
+    const match = isoString.match(/T(\d{2}):(\d{2})/);
+    if (match) {
+        return `${match[1]}:${match[2]}`;
+    }
+    return '';
+}
+
+// Helper function to format date/time from ISO strings
+function formatDateTime(startISO, endISO) {
+    // Parse the date portion for display
+    const startDate = new Date(startISO);
+    
     const dateOptions = { 
         weekday: 'short', 
         year: 'numeric', 
         month: 'short', 
         day: 'numeric' 
     };
-    const timeOptions = { 
-        hour: '2-digit', 
-        minute: '2-digit' 
-    };
     
     const dateStr = startDate.toLocaleDateString('de-DE', dateOptions);
-    const startTimeStr = startDate.toLocaleTimeString('de-DE', timeOptions);
+    const startTimeStr = extractTimeFromISO(startISO);
     
-    if (endDate) {
-        const endTimeStr = endDate.toLocaleTimeString('de-DE', timeOptions);
+    if (endISO) {
+        const endTimeStr = extractTimeFromISO(endISO);
         return `${dateStr}, ${startTimeStr} - ${endTimeStr}`;
     } else {
         return `${dateStr}, ${startTimeStr}`;
