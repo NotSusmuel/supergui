@@ -10,6 +10,10 @@ from dotenv import load_dotenv
 # Load environment variables from .env file
 load_dotenv()
 
+# Fallback: if .env doesn't exist, try .env.example
+if not os.path.exists('.env'):
+    load_dotenv('.env.example')
+
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
@@ -254,24 +258,36 @@ def index():
 @app.route('/api/timetable')
 def get_timetable():
     """API endpoint to get timetable data"""
-    # First, try to fetch from URL
-    ics_content = fetch_ics_from_url(app.config['ICS_URL'])
+    # Check for mode parameter (auto or manual)
+    mode = request.args.get('mode', 'auto')
     
-    if ics_content:
-        events = parse_ics_content(ics_content)
+    events = []
+    
+    if mode == 'auto':
+        # Try to fetch from URL
+        ics_content = fetch_ics_from_url(app.config['ICS_URL'])
+        
+        if ics_content:
+            events = parse_ics_content(ics_content)
+        else:
+            # Auto fetch failed, fallback to local file
+            ics_files = list(Path(app.config['UPLOAD_FOLDER']).glob('*.ics'))
+            if ics_files:
+                events = parse_ics_file(ics_files[0])
     else:
-        # Fallback to local file
+        # Manual mode - use uploaded file only
         ics_files = list(Path(app.config['UPLOAD_FOLDER']).glob('*.ics'))
-        
-        if not ics_files:
-            return jsonify({
-                'next_lesson': None,
-                'exams': [],
-                'message': 'Keine Stundenplan-Daten verfügbar. Automatische Aktualisierung fehlgeschlagen.'
-            })
-        
-        # Use the first ICS file found
-        events = parse_ics_file(ics_files[0])
+        if ics_files:
+            events = parse_ics_file(ics_files[0])
+    
+    if not events:
+        return jsonify({
+            'next_lesson': None,
+            'current_lesson': None,
+            'todays_lessons': [],
+            'exams': [],
+            'message': 'Keine Stundenplan-Daten verfügbar. Bitte ICS-Datei hochladen oder automatische Synchronisation aktivieren.'
+        })
     
     next_lesson = get_next_lesson(events)
     current_lesson = get_current_lesson(events)
