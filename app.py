@@ -8,17 +8,37 @@ from pathlib import Path
 from dotenv import load_dotenv
 import re
 
-# Load environment variables from .env file
-load_dotenv()
-
-# Fallback: if .env doesn't exist, try .env.example
-if not os.path.exists('.env'):
-    load_dotenv('.env.example')
+# Load configuration from config.py (or config.py.example if config.py doesn't exist)
+try:
+    import config
+    ICS_URL = config.ICS_URL if hasattr(config, 'ICS_URL') and config.ICS_URL else None
+    OPENWEATHER_API_KEY = config.OPENWEATHER_API_KEY if hasattr(config, 'OPENWEATHER_API_KEY') and config.OPENWEATHER_API_KEY else None
+    FLASK_ENV = config.FLASK_ENV if hasattr(config, 'FLASK_ENV') else 'development'
+except ImportError:
+    # If config.py doesn't exist, try importing from config.py.example
+    try:
+        import sys
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import importlib.util
+        spec = importlib.util.spec_from_file_location("config", "config.py.example")
+        config = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(config)
+        ICS_URL = config.ICS_URL if hasattr(config, 'ICS_URL') and config.ICS_URL else None
+        OPENWEATHER_API_KEY = config.OPENWEATHER_API_KEY if hasattr(config, 'OPENWEATHER_API_KEY') and config.OPENWEATHER_API_KEY else None
+        FLASK_ENV = config.FLASK_ENV if hasattr(config, 'FLASK_ENV') else 'development'
+    except Exception:
+        # Final fallback to environment variables
+        load_dotenv()
+        if not os.path.exists('.env'):
+            load_dotenv('.env.example')
+        ICS_URL = os.getenv('ICS_URL')
+        OPENWEATHER_API_KEY = os.getenv('OPENWEATHER_API_KEY')
+        FLASK_ENV = os.getenv('FLASK_ENV', 'development')
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
-app.config['ICS_URL'] = 'https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/dmbphs0g5i58gpwo7fxkja/timetable.ics'
+app.config['ICS_URL'] = ICS_URL
 
 # Ensure upload folder exists
 Path(app.config['UPLOAD_FOLDER']).mkdir(exist_ok=True)
@@ -396,12 +416,12 @@ def get_timetable():
 @app.route('/api/weather')
 def get_weather():
     """API endpoint to get weather data for Romanshorn"""
-    api_key = os.environ.get('OPENWEATHER_API_KEY', '')
+    api_key = OPENWEATHER_API_KEY or os.environ.get('OPENWEATHER_API_KEY', '')
     
     if not api_key:
         return jsonify({
             'error': 'OpenWeather API key not configured',
-            'message': 'Please set OPENWEATHER_API_KEY environment variable'
+            'message': 'Please set OPENWEATHER_API_KEY in config.py or environment variable'
         }), 500
     
     try:

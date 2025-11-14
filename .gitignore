@@ -36,6 +36,9 @@ env/
 .env
 .env.local
 
+# Configuration file (contains personal data)
+config.py
+
 # OS
 .DS_Store
 Thumbs.db

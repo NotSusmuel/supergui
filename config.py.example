@@ -1,0 +1,31 @@
+# SuperGUI Configuration File
+# ===========================
+# Edit this file to customize your timetable URL and API settings
+# IMPORTANT: After editing, add config.py to .gitignore to keep your data private!
+
+# Timetable ICS URL
+# -----------------
+# Replace this with your personal KSR timetable URL
+# You can find your URL in the ISY portal under "Stundenplan"
+# Example: https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/YOUR_ID_HERE/timetable.ics
+#
+# IMPORTANT: This is YOUR PERSONAL timetable link! Keep it private.
+ICS_URL = ''
+
+# OpenWeather API Key
+# -------------------
+# Get your free API key from: https://openweathermap.org/api
+# Sign up, verify your email, and copy your API key here
+#
+# IMPORTANT: This is YOUR API key! Keep it private.
+OPENWEATHER_API_KEY = ''
+
+# City for Weather
+# ----------------
+# Default city for weather information
+WEATHER_CITY = 'Romanshorn'
+
+# Flask Configuration
+# -------------------
+# Set to 'production' when deploying, 'development' for local testing
+FLASK_ENV = 'development'
