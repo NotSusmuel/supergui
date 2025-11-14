@@ -1691,3 +1691,47 @@ body::before {
     transform: translateY(0) !important;
     box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3) !important;
 }
+
+/* ====== FIX: ALWAYS 4 COLUMNS IN ONE ROW ====== */
+.compact-row {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    grid-template-rows: 1fr !important;
+    gap: 8px !important;
+    height: 100% !important;
+    width: 100% !important;
+}
+
+/* Remove the 2x2 grid at 1400px - keep 4 columns */
+@media (max-width: 1400px) {
+    .compact-row {
+        grid-template-columns: repeat(4, 1fr) !important;
+        grid-template-rows: 1fr !important;
+    }
+}
+
+/* Only on very small screens go to single column */
+@media (max-width: 800px) {
+    .compact-row {
+        grid-template-columns: 1fr !important;
+        grid-template-rows: auto !important;
+        overflow-y: auto;
+    }
+    
+    .compact-card {
+        height: auto !important;
+        min-height: 200px !important;
+    }
+}
+
+/* ====== ICON-BASED SEARCH BUTTONS ====== */
+.search-btn-compact {
+    padding: 6px 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+}
+
+.search-btn-compact svg {
+    display: block !important;
+}
