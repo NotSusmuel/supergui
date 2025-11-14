@@ -172,6 +172,7 @@ function updateCurrentNotebook(currentLesson) {
     // Set current lesson end time for countdown
     if (currentLesson.end) {
         currentLessonEndTime = new Date(currentLesson.end);
+        currentLessonEndTimeForRefresh = new Date(currentLesson.end);
     }
     
     if (!onenoteLink) {
@@ -209,12 +210,28 @@ function updateCurrentNotebook(currentLesson) {
     updateCountdown();
 }
 
+// Track when next lesson starts for auto-refresh
+let nextLessonStartTimeForRefresh = null;
+let currentLessonEndTimeForRefresh = null;
+let autoRefreshInterval = null;
+
 // Load Timetable Data
-async function loadTimetable() {
+async function loadTimetable(useFastLoad = false) {
     try {
-        // Always use auto mode now (manual upload removed)
-        const response = await fetch(`/api/timetable?mode=auto`);
-        const data = await response.json();
+        let response, data;
+        
+        if (useFastLoad) {
+            // Fast initial load with static minimal data
+            response = await fetch('/static/fast_timetable.json');
+            data = await response.json();
+            
+            // Start background fetch for real data
+            setTimeout(() => loadTimetable(false), 100);
+        } else {
+            // Full load from API
+            response = await fetch(`/api/timetable?mode=auto`);
+            data = await response.json();
+        }
         
         // Update Current Lesson OneNote Link
         updateCurrentNotebook(data.current_lesson);
@@ -230,6 +247,7 @@ async function loadTimetable() {
             
             // Set the next lesson start time for countdown
             nextLessonStartTime = new Date(lesson.start);
+            nextLessonStartTimeForRefresh = new Date(lesson.start);
             
             const timeString = formatDateTime(lesson.start, lesson.end);
             
@@ -272,6 +290,7 @@ async function loadTimetable() {
         } else {
             nextLessonDiv.innerHTML = `<p class="no-data">Keine kommenden Lektionen gefunden.</p>`;
             nextLessonStartTime = null;
+            nextLessonStartTimeForRefresh = null;
         }
         
         // Display today's lessons
@@ -340,6 +359,10 @@ async function loadTimetable() {
         } else {
             examsListDiv.innerHTML = `<p class="no-data">Keine kommenden Prüfungen.</p>`;
         }
+        
+        // Setup auto-refresh when lesson starts/ends
+        setupAutoRefresh();
+        
     } catch (error) {
         console.error('Error loading timetable:', error);
         document.getElementById('nextLesson').innerHTML = 
@@ -347,6 +370,34 @@ async function loadTimetable() {
         document.getElementById('examsList').innerHTML = 
             `<p class="error-message">Fehler beim Laden der Prüfungen</p>`;
     }
+}
+
+// Setup auto-refresh when lesson starts or ends
+function setupAutoRefresh() {
+    // Clear existing interval
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+    }
+    
+    // Check every second if we need to refresh
+    autoRefreshInterval = setInterval(() => {
+        const now = new Date();
+        
+        // Refresh when next lesson starts (becomes current lesson)
+        if (nextLessonStartTimeForRefresh && now >= nextLessonStartTimeForRefresh) {
+            console.log('Next lesson started - refreshing timetable');
+            loadTimetable(false);
+            nextLessonStartTimeForRefresh = null;
+        }
+        
+        // Refresh when current lesson ends
+        if (currentLessonEndTimeForRefresh && now >= currentLessonEndTimeForRefresh) {
+            console.log('Current lesson ended - refreshing timetable');
+            loadTimetable(false);
+            currentLessonEndTimeForRefresh = null;
+        }
+    }, 1000); // Check every second
 }
 
 // Load Weather Data
@@ -433,10 +484,11 @@ function formatDateTime(startISO, endISO) {
 
 // Initialize data on page load
 document.addEventListener('DOMContentLoaded', function() {
-    loadTimetable();
+    // Use fast load for instant UI
+    loadTimetable(true);
     loadWeather();
     
-    // Refresh data periodically
-    setInterval(loadTimetable, 5 * 60 * 1000); // Every 5 minutes
+    // Refresh full data periodically (every 5 minutes)
+    setInterval(() => loadTimetable(false), 5 * 60 * 1000);
     setInterval(loadWeather, 10 * 60 * 1000);  // Every 10 minutes
 });

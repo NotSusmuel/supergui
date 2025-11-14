@@ -298,7 +298,7 @@ def get_current_lesson(events):
     return None
 
 def get_todays_lessons(events):
-    """Get all lessons for today"""
+    """Get all lessons for today that haven't ended yet"""
     zurich_tz = pytz.timezone('Europe/Zurich')
     now = datetime.now(zurich_tz)
     today_str = now.strftime('%Y%m%d')
@@ -308,7 +308,9 @@ def get_todays_lessons(events):
         # Check if the event starts on the same day (compare YYYYMMDD format)
         event_date_str = event['start'].strftime('%Y%m%d')
         if event_date_str == today_str:
-            todays.append(event)
+            # Only include lessons that haven't ended yet
+            if event['end'] > now:
+                todays.append(event)
     
     return todays
 
