@@ -1784,3 +1784,60 @@ body {
     flex-direction: column !important;
     min-height: 0 !important;
 }
+
+/* ====== UNIFIED LESSON CARD STYLE ====== */
+.lesson-card {
+    background: rgba(30, 41, 59, 0.6);
+    border: 2px solid rgba(99, 102, 241, 0.3);
+    border-radius: 12px;
+    padding: 12px;
+    transition: var(--transition);
+}
+
+.current-lesson-card {
+    border-color: rgba(16, 185, 129, 0.4);
+    animation: glowBox 2s ease-in-out infinite;
+}
+
+.lesson-status {
+    text-align: center;
+    padding: 20px;
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    font-style: italic;
+}
+
+.no-notebook-text {
+    text-align: center;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin-top: 8px;
+    font-style: italic;
+}
+
+.notebook-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    padding: 10px;
+    margin-top: 12px;
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    border: none;
+    border-radius: 8px;
+    color: white;
+    font-size: 0.85rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.notebook-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.4);
+}
+
+.notebook-btn svg {
+    flex-shrink: 0;
+}
