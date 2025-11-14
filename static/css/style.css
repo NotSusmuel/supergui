@@ -1850,3 +1850,43 @@ body {
 .today-lesson-item:hover, .exam-item:hover {
     border-color: inherit !important;
 }
+
+/* ====== FIX HOVER EFFECTS AND CARD STYLING ====== */
+/* Re-enable glow on card hover */
+.compact-card:hover {
+    transform: translateY(0) !important;
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.5) !important;
+    border-color: rgba(99, 102, 241, 0.6) !important;
+}
+
+/* Next lesson card - blue glow */
+.next-lesson-card {
+    border-color: rgba(99, 102, 241, 0.4);
+    animation: glowBox 2s ease-in-out infinite;
+}
+
+/* Remove all hover borders from lesson items inside cards */
+.lesson-info:hover {
+    border-color: transparent !important;
+    transform: none !important;
+    background: transparent !important;
+}
+
+.today-lesson-item:hover {
+    border-color: transparent !important;
+    transform: translateX(0) !important;
+    background: rgba(15, 23, 42, 0.4) !important;
+}
+
+.exam-item:hover {
+    border-color: transparent !important;
+    transform: translateX(0) !important;
+    background: rgba(15, 23, 42, 0.4) !important;
+}
+
+/* Ensure lesson-info doesn't have conflicting styles */
+.lesson-info.compact {
+    padding: 0 !important;
+    background: transparent !important;
+    border: none !important;
+}

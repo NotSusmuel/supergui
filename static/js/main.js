@@ -409,14 +409,15 @@ async function loadTimetable(useFastLoad = false) {
             const cancelledClass = lesson.is_cancelled ? 'cancelled' : '';
             
             nextLessonDiv.innerHTML = `
-                <div class="lesson-title">${lesson.summary}</div>
-                ${locationHtml}
-                <div class="lesson-time">${timeString}</div>
-                <div class="lesson-countdown" id="lessonCountdown">Berechne...</div>
-                ${lesson.description ? `<div class="lesson-description">${lesson.description}</div>` : ''}
-                ${specialBadge}
+                <div class="lesson-card next-lesson-card ${cancelledClass}">
+                    <div class="lesson-title">${lesson.summary}</div>
+                    ${locationHtml}
+                    <div class="lesson-countdown" id="lessonCountdown">Berechne...</div>
+                    ${lesson.description ? `<div class="lesson-description">${lesson.description}</div>` : ''}
+                    ${specialBadge}
+                </div>
             `;
-            nextLessonDiv.className = `lesson-info ${cancelledClass}`;
+            nextLessonDiv.className = 'lesson-info compact';
             
             // Trigger initial countdown update
             updateCountdown();
