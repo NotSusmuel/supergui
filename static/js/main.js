@@ -1,3 +1,131 @@
+// Language and Notification Support
+let currentLanguage = 'de';
+let translations = {};
+let notificationsEnabled = false;
+let notifiedExams = new Set();
+
+// Load translations
+async function loadTranslations(lang) {
+    try {
+        const response = await fetch(`/static/lang/${lang}.json`);
+        translations = await response.json();
+        currentLanguage = lang;
+        updatePageLanguage();
+        localStorage.setItem('language', lang);
+    } catch (error) {
+        console.error('Error loading translations:', error);
+    }
+}
+
+// Update all text on page
+function updatePageLanguage() {
+    document.querySelectorAll('[data-i18n]').forEach(element => {
+        const key = element.getAttribute('data-i18n');
+        if (translations[key]) {
+            if (element.tagName === 'INPUT') {
+                element.placeholder = translations[key];
+            } else {
+                element.textContent = translations[key];
+            }
+        }
+    });
+    
+    // Update date format based on language
+    updateClock();
+}
+
+// Toggle language
+function toggleLanguage() {
+    const newLang = currentLanguage === 'de' ? 'en' : 'de';
+    loadTranslations(newLang);
+    document.getElementById('currentLang').textContent = newLang.toUpperCase();
+}
+
+// Toggle notifications
+function toggleNotifications() {
+    notificationsEnabled = !notificationsEnabled;
+    const btn = document.querySelector('.notify-btn');
+    
+    if (notificationsEnabled) {
+        btn.classList.add('active');
+        requestNotificationPermission();
+        localStorage.setItem('notifications', 'enabled');
+    } else {
+        btn.classList.remove('active');
+        localStorage.setItem('notifications', 'disabled');
+    }
+}
+
+// Request notification permission
+function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+
+// Show notification
+function showNotification(title, message) {
+    if (!notificationsEnabled) return;
+    
+    // Browser notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, {
+            body: message,
+            icon: '/static/favicon.ico',
+            badge: '/static/favicon.ico'
+        });
+    }
+    
+    // Toast notification
+    showToast(title, message);
+    
+    // Play sound
+    const audio = document.getElementById('notificationSound');
+    if (audio) {
+        audio.play().catch(() => {});
+    }
+}
+
+// Show toast notification
+function showToast(title, message) {
+    const toast = document.createElement('div');
+    toast.className = 'notification-toast';
+    toast.innerHTML = `
+        <div class="toast-title">${title}</div>
+        <div class="toast-message">${message}</div>
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
+}
+
+// Check for upcoming exams and notify
+function checkExamNotifications(exams) {
+    if (!notificationsEnabled || !exams) return;
+    
+    const now = new Date();
+    exams.forEach(exam => {
+        const examDate = new Date(exam.start);
+        const daysDiff = Math.floor((examDate - now) / (1000 * 60 * 60 * 24));
+        const examKey = `${exam.summary}-${exam.start}`;
+        
+        // Notify 7 days, 3 days, 1 day, and 1 hour before
+        if (!notifiedExams.has(examKey)) {
+            if (daysDiff === 7 || daysDiff === 3 || daysDiff === 1) {
+                const daysText = translations.days || 'd';
+                showNotification(
+                    translations.exam_notification || 'Prüfung in',
+                    `${exam.summary} ${translations.starts_in || 'in'} ${daysDiff}${daysText}`
+                );
+                notifiedExams.add(examKey);
+            }
+        }
+    });
+}
+
 // Clock Update
 function updateClock() {
     const now = new Date();
@@ -8,14 +136,15 @@ function updateClock() {
     const seconds = String(now.getSeconds()).padStart(2, '0');
     const timeString = `${hours}:${minutes}:${seconds}`;
     
-    // Format date
+    // Format date based on language
+    const locale = currentLanguage === 'de' ? 'de-DE' : 'en-US';
     const options = { 
         weekday: 'long', 
         year: 'numeric', 
         month: 'long', 
         day: 'numeric' 
     };
-    const dateString = now.toLocaleDateString('de-DE', options);
+    const dateString = now.toLocaleDateString(locale, options);
     
     document.getElementById('time').textContent = timeString;
     document.getElementById('date').textContent = dateString;
@@ -360,6 +489,9 @@ async function loadTimetable(useFastLoad = false) {
             examsListDiv.innerHTML = `<p class="no-data">Keine kommenden Prüfungen.</p>`;
         }
         
+        // Check for exam notifications
+        checkExamNotifications(data.exams);
+        
         // Setup auto-refresh when lesson starts/ends
         setupAutoRefresh();
         
@@ -484,6 +616,18 @@ function formatDateTime(startISO, endISO) {
 
 // Initialize data on page load
 document.addEventListener('DOMContentLoaded', function() {
+    // Load saved language preference
+    const savedLang = localStorage.getItem('language') || 'de';
+    loadTranslations(savedLang);
+    document.getElementById('currentLang').textContent = savedLang.toUpperCase();
+    
+    // Load notification preference
+    const savedNotif = localStorage.getItem('notifications');
+    if (savedNotif === 'enabled') {
+        notificationsEnabled = true;
+        document.querySelector('.notify-btn').classList.add('active');
+    }
+    
     // Use fast load for instant UI
     loadTimetable(true);
     loadWeather();

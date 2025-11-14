@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, session, redirect, url_for
 from datetime import datetime, timedelta
 import pytz
 import csv
@@ -9,6 +9,8 @@ from dotenv import load_dotenv
 import re
 from threading import Lock
 import time as time_module
+import hashlib
+import secrets
 
 # Load configuration from config.py (or config.py.example if config.py doesn't exist)
 try:
@@ -41,6 +43,13 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['ICS_URL'] = ICS_URL
+app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', secrets.token_hex(32))
+
+# Simple user credentials (in production, use a database)
+USERS = {
+    'admin': hashlib.sha256('admin123'.encode()).hexdigest(),
+    'user': hashlib.sha256('user123'.encode()).hexdigest()
+}
 
 # Ensure upload folder exists
 Path(app.config['UPLOAD_FOLDER']).mkdir(exist_ok=True)
@@ -326,10 +335,40 @@ def get_upcoming_exams(events, count=3):
     # Return only the first 'count' exams
     return exams[:count]
 
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    """Handle login"""
+    if request.method == 'POST':
+        username = request.form.get('username')
+        password = request.form.get('password')
+        password_hash = hashlib.sha256(password.encode()).hexdigest()
+        
+        if username in USERS and USERS[username] == password_hash:
+            session['user'] = username
+            return redirect(url_for('index'))
+        else:
+            return render_template('login.html', error=True)
+    
+    # If already logged in, redirect to index
+    if 'user' in session:
+        return redirect(url_for('index'))
+    
+    return render_template('login.html', error=False)
+
+@app.route('/logout')
+def logout():
+    """Handle logout"""
+    session.pop('user', None)
+    return redirect(url_for('login'))
+
 @app.route('/')
 def index():
     """Render main page"""
-    return render_template('index.html')
+    # Check if user is logged in
+    if 'user' not in session:
+        return redirect(url_for('login'))
+    
+    return render_template('index.html', username=session.get('user'))
 
 @app.route('/api/timetable')
 def get_timetable():
