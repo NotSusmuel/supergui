@@ -25,6 +25,51 @@ function updateClock() {
 setInterval(updateClock, 1000);
 updateClock(); // Initial call
 
+// Countdown Timer
+let nextLessonStartTime = null;
+
+function updateCountdown() {
+    if (!nextLessonStartTime) return;
+    
+    const now = new Date();
+    const diff = nextLessonStartTime - now;
+    
+    if (diff <= 0) {
+        // Lesson has started or passed
+        const countdownDiv = document.getElementById('lessonCountdown');
+        if (countdownDiv) {
+            countdownDiv.textContent = 'Lektion beginnt jetzt!';
+        }
+        return;
+    }
+    
+    // Calculate time remaining
+    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+    
+    // Format countdown
+    let countdownText = 'Beginnt in ';
+    if (days > 0) {
+        countdownText += `${days}d ${hours}h ${minutes}m`;
+    } else if (hours > 0) {
+        countdownText += `${hours}h ${minutes}m ${seconds}s`;
+    } else if (minutes > 0) {
+        countdownText += `${minutes}m ${seconds}s`;
+    } else {
+        countdownText += `${seconds}s`;
+    }
+    
+    const countdownDiv = document.getElementById('lessonCountdown');
+    if (countdownDiv) {
+        countdownDiv.textContent = countdownText;
+    }
+}
+
+// Update countdown every second
+setInterval(updateCountdown, 1000);
+
 // Search Functions
 function search(engine) {
     const query = document.getElementById('searchInput').value.trim();
@@ -131,8 +176,12 @@ async function loadTimetable() {
         
         if (data.message) {
             nextLessonDiv.innerHTML = `<p class="no-data">${data.message}</p>`;
+            nextLessonStartTime = null;
         } else if (data.next_lesson) {
             const lesson = data.next_lesson;
+            
+            // Set the next lesson start time for countdown
+            nextLessonStartTime = new Date(lesson.start);
             
             const timeString = formatDateTime(lesson.start, lesson.end);
             
@@ -164,12 +213,17 @@ async function loadTimetable() {
                 <div class="lesson-title">${lesson.summary}</div>
                 ${locationHtml}
                 <div class="lesson-time">${timeString}</div>
+                <div class="lesson-countdown" id="lessonCountdown">Berechne...</div>
                 ${lesson.description ? `<div class="lesson-description">${lesson.description}</div>` : ''}
                 ${specialBadge}
             `;
             nextLessonDiv.className = `lesson-info ${cancelledClass}`;
+            
+            // Trigger initial countdown update
+            updateCountdown();
         } else {
             nextLessonDiv.innerHTML = `<p class="no-data">Keine kommenden Lektionen gefunden.</p>`;
+            nextLessonStartTime = null;
         }
         
         // Display today's lessons
@@ -236,7 +290,7 @@ async function loadTimetable() {
                 `;
             }).join('');
         } else {
-            examsListDiv.innerHTML = `<p class="no-data">Keine kommenden Prüfungen in den nächsten 14 Tagen.</p>`;
+            examsListDiv.innerHTML = `<p class="no-data">Keine kommenden Prüfungen.</p>`;
         }
     } catch (error) {
         console.error('Error loading timetable:', error);

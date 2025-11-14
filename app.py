@@ -302,14 +302,17 @@ def get_todays_lessons(events):
     
     return todays
 
-def get_upcoming_exams(events, days=14):
-    """Get exams in the next specified days"""
+def get_upcoming_exams(events, count=3):
+    """Get the next specified number of upcoming exams (not limited by days)"""
     zurich_tz = pytz.timezone('Europe/Zurich')
     now = datetime.now(zurich_tz)
-    future = now + timedelta(days=days)
     
-    exams = [e for e in events if e['is_exam'] and now <= e['start'] <= future]
-    return exams
+    # Get all future exams and sort by start time
+    exams = [e for e in events if e['is_exam'] and e['start'] > now]
+    exams.sort(key=lambda x: x['start'])
+    
+    # Return only the first 'count' exams
+    return exams[:count]
 
 @app.route('/')
 def index():

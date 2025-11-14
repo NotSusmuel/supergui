@@ -584,6 +584,27 @@ body::before {
     margin-bottom: 5px;
 }
 
+.lesson-countdown {
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--primary-light);
+    margin-top: 8px;
+    padding: 8px 16px;
+    background: rgba(99, 102, 241, 0.15);
+    border-radius: 12px;
+    text-align: center;
+    animation: glow 2s ease-in-out infinite;
+}
+
+@keyframes glow {
+    0%, 100% {
+        box-shadow: 0 0 5px rgba(99, 102, 241, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 15px rgba(99, 102, 241, 0.6);
+    }
+}
+
 .lesson-description, .exam-description {
     font-size: 0.9rem;
     color: var(--text-secondary);
