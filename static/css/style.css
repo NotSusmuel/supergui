@@ -1735,3 +1735,35 @@ body::before {
 .search-btn-compact svg {
     display: block !important;
 }
+
+/* ====== FORCE FULL SCREEN WIDTH ====== */
+.container.compact {
+    max-width: 100vw !important;
+    width: 100vw !important;
+    margin: 0 !important;
+    padding: 8px !important;
+    box-sizing: border-box !important;
+}
+
+.compact-header {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.compact-main {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+.compact-row {
+    width: 100% !important;
+    box-sizing: border-box !important;
+}
+
+/* ====== ENSURE BODY IS FULL WIDTH ====== */
+body {
+    margin: 0 !important;
+    padding: 0 !important;
+    width: 100vw !important;
+    overflow-x: hidden !important;
+}
