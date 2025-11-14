@@ -1841,3 +1841,12 @@ body {
 .notebook-btn svg {
     flex-shrink: 0;
 }
+
+/* ====== REMOVE PURPLE HOVER BORDER ON COMPACT CARDS ====== */
+.compact-card:hover {
+    border-color: inherit !important;
+}
+
+.today-lesson-item:hover, .exam-item:hover {
+    border-color: inherit !important;
+}
