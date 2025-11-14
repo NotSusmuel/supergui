@@ -1,3 +1,131 @@
+// Language and Notification Support
+let currentLanguage = 'de';
+let translations = {};
+let notificationsEnabled = false;
+let notifiedExams = new Set();
+
+// Load translations
+async function loadTranslations(lang) {
+    try {
+        const response = await fetch(`/static/lang/${lang}.json`);
+        translations = await response.json();
+        currentLanguage = lang;
+        updatePageLanguage();
+        localStorage.setItem('language', lang);
+    } catch (error) {
+        console.error('Error loading translations:', error);
+    }
+}
+
+// Update all text on page
+function updatePageLanguage() {
+    document.querySelectorAll('[data-i18n]').forEach(element => {
+        const key = element.getAttribute('data-i18n');
+        if (translations[key]) {
+            if (element.tagName === 'INPUT') {
+                element.placeholder = translations[key];
+            } else {
+                element.textContent = translations[key];
+            }
+        }
+    });
+    
+    // Update date format based on language
+    updateClock();
+}
+
+// Toggle language
+function toggleLanguage() {
+    const newLang = currentLanguage === 'de' ? 'en' : 'de';
+    loadTranslations(newLang);
+    document.getElementById('currentLang').textContent = newLang.toUpperCase();
+}
+
+// Toggle notifications
+function toggleNotifications() {
+    notificationsEnabled = !notificationsEnabled;
+    const btn = document.querySelector('.notify-btn');
+    
+    if (notificationsEnabled) {
+        btn.classList.add('active');
+        requestNotificationPermission();
+        localStorage.setItem('notifications', 'enabled');
+    } else {
+        btn.classList.remove('active');
+        localStorage.setItem('notifications', 'disabled');
+    }
+}
+
+// Request notification permission
+function requestNotificationPermission() {
+    if ('Notification' in window && Notification.permission === 'default') {
+        Notification.requestPermission();
+    }
+}
+
+// Show notification
+function showNotification(title, message) {
+    if (!notificationsEnabled) return;
+    
+    // Browser notification
+    if ('Notification' in window && Notification.permission === 'granted') {
+        new Notification(title, {
+            body: message,
+            icon: '/static/favicon.ico',
+            badge: '/static/favicon.ico'
+        });
+    }
+    
+    // Toast notification
+    showToast(title, message);
+    
+    // Play sound
+    const audio = document.getElementById('notificationSound');
+    if (audio) {
+        audio.play().catch(() => {});
+    }
+}
+
+// Show toast notification
+function showToast(title, message) {
+    const toast = document.createElement('div');
+    toast.className = 'notification-toast';
+    toast.innerHTML = `
+        <div class="toast-title">${title}</div>
+        <div class="toast-message">${message}</div>
+    `;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.style.animation = 'slideOutRight 0.3s ease-out';
+        setTimeout(() => toast.remove(), 300);
+    }, 5000);
+}
+
+// Check for upcoming exams and notify
+function checkExamNotifications(exams) {
+    if (!notificationsEnabled || !exams) return;
+    
+    const now = new Date();
+    exams.forEach(exam => {
+        const examDate = new Date(exam.start);
+        const daysDiff = Math.floor((examDate - now) / (1000 * 60 * 60 * 24));
+        const examKey = `${exam.summary}-${exam.start}`;
+        
+        // Notify 7 days, 3 days, 1 day, and 1 hour before
+        if (!notifiedExams.has(examKey)) {
+            if (daysDiff === 7 || daysDiff === 3 || daysDiff === 1) {
+                const daysText = translations.days || 'd';
+                showNotification(
+                    translations.exam_notification || 'Prüfung in',
+                    `${exam.summary} ${translations.starts_in || 'in'} ${daysDiff}${daysText}`
+                );
+                notifiedExams.add(examKey);
+            }
+        }
+    });
+}
+
 // Clock Update
 function updateClock() {
     const now = new Date();
@@ -8,14 +136,15 @@ function updateClock() {
     const seconds = String(now.getSeconds()).padStart(2, '0');
     const timeString = `${hours}:${minutes}:${seconds}`;
     
-    // Format date
+    // Format date based on language
+    const locale = currentLanguage === 'de' ? 'de-DE' : 'en-US';
     const options = { 
         weekday: 'long', 
         year: 'numeric', 
         month: 'long', 
         day: 'numeric' 
     };
-    const dateString = now.toLocaleDateString('de-DE', options);
+    const dateString = now.toLocaleDateString(locale, options);
     
     document.getElementById('time').textContent = timeString;
     document.getElementById('date').textContent = dateString;
@@ -27,43 +156,78 @@ updateClock(); // Initial call
 
 // Countdown Timer
 let nextLessonStartTime = null;
+let currentLessonEndTime = null;
 
 function updateCountdown() {
-    if (!nextLessonStartTime) return;
-    
-    const now = new Date();
-    const diff = nextLessonStartTime - now;
-    
-    if (diff <= 0) {
-        // Lesson has started or passed
-        const countdownDiv = document.getElementById('lessonCountdown');
-        if (countdownDiv) {
-            countdownDiv.textContent = 'Lektion beginnt jetzt!';
+    // Update next lesson countdown
+    if (nextLessonStartTime) {
+        const now = new Date();
+        const diff = nextLessonStartTime - now;
+        
+        if (diff <= 0) {
+            // Lesson has started or passed
+            const countdownDiv = document.getElementById('lessonCountdown');
+            if (countdownDiv) {
+                countdownDiv.textContent = 'Lektion beginnt jetzt!';
+            }
+        } else {
+            // Calculate time remaining
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            // Format countdown
+            let countdownText = 'Beginnt in ';
+            if (days > 0) {
+                countdownText += `${days}d ${hours}h ${minutes}m`;
+            } else if (hours > 0) {
+                countdownText += `${hours}h ${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+                countdownText += `${minutes}m ${seconds}s`;
+            } else {
+                countdownText += `${seconds}s`;
+            }
+            
+            const countdownDiv = document.getElementById('lessonCountdown');
+            if (countdownDiv) {
+                countdownDiv.textContent = countdownText;
+            }
         }
-        return;
     }
     
-    // Calculate time remaining
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-    
-    // Format countdown
-    let countdownText = 'Beginnt in ';
-    if (days > 0) {
-        countdownText += `${days}d ${hours}h ${minutes}m`;
-    } else if (hours > 0) {
-        countdownText += `${hours}h ${minutes}m ${seconds}s`;
-    } else if (minutes > 0) {
-        countdownText += `${minutes}m ${seconds}s`;
-    } else {
-        countdownText += `${seconds}s`;
-    }
-    
-    const countdownDiv = document.getElementById('lessonCountdown');
-    if (countdownDiv) {
-        countdownDiv.textContent = countdownText;
+    // Update current lesson end countdown
+    if (currentLessonEndTime) {
+        const now = new Date();
+        const diff = currentLessonEndTime - now;
+        
+        if (diff <= 0) {
+            // Lesson has ended
+            const endCountdownDiv = document.getElementById('currentLessonEndCountdown');
+            if (endCountdownDiv) {
+                endCountdownDiv.textContent = 'Lektion ist zu Ende!';
+            }
+        } else {
+            // Calculate time remaining
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            // Format countdown
+            let countdownText = 'Endet in ';
+            if (hours > 0) {
+                countdownText += `${hours}h ${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+                countdownText += `${minutes}m ${seconds}s`;
+            } else {
+                countdownText += `${seconds}s`;
+            }
+            
+            const endCountdownDiv = document.getElementById('currentLessonEndCountdown');
+            if (endCountdownDiv) {
+                endCountdownDiv.textContent = countdownText;
+            }
+        }
     }
 }
 
@@ -117,56 +281,90 @@ function updateCurrentNotebook(currentLesson) {
     const notebookDiv = document.getElementById('currentNotebook');
     
     if (!currentLesson) {
-        // No current lesson
+        // No current lesson - use same card style as next lesson
         notebookDiv.innerHTML = `
-            <div class="no-lesson">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                </svg>
-                <p>Gerade kein Unterricht</p>
+            <div class="lesson-card current-lesson-card">
+                <div class="lesson-status">Gerade kein Unterricht</div>
             </div>
         `;
+        // Clear current lesson end time
+        currentLessonEndTime = null;
         return;
     }
     
     const subject = currentLesson.subject;
     const onenoteLink = currentLesson.onenote_link;
+    const location = currentLesson.location || '';
+    
+    // Set current lesson end time for countdown
+    if (currentLesson.end) {
+        currentLessonEndTime = new Date(currentLesson.end);
+        currentLessonEndTimeForRefresh = new Date(currentLesson.end);
+    }
+    
+    const locationHtml = location ? 
+        `<div class="lesson-location">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/>
+            </svg>
+            ${location}
+        </div>` : '';
     
     if (!onenoteLink) {
-        // No notebook for this subject
+        // No notebook for this subject - card style
         notebookDiv.innerHTML = `
-            <div class="no-notebook">
-                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" opacity="0.5">
-                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-                </svg>
-                <p class="current-subject">${subject}</p>
+            <div class="lesson-card current-lesson-card">
+                <div class="lesson-title">${subject}</div>
+                ${locationHtml}
+                <div class="lesson-countdown" id="currentLessonEndCountdown">Berechne...</div>
                 <p class="no-notebook-text">Fach hat kein Notizbuch</p>
             </div>
         `;
+        // Trigger countdown update
+        updateCountdown();
         return;
     }
     
-    // Has a notebook link
+    // Has a notebook link - card style
     notebookDiv.innerHTML = `
-        <div class="has-notebook">
-            <p class="current-subject-small">Aktuelles Fach:</p>
-            <p class="current-subject">${subject}</p>
+        <div class="lesson-card current-lesson-card">
+            <div class="lesson-title">${subject}</div>
+            ${locationHtml}
+            <div class="lesson-countdown" id="currentLessonEndCountdown">Berechne...</div>
             <button class="notebook-btn" onclick="window.location.href='${onenoteLink}'">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M22 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h17c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 17V7h3v10H7zm12 0h-9V7h9v10z"/>
                 </svg>
                 Notizbuch öffnen
             </button>
         </div>
     `;
+    // Trigger countdown update
+    updateCountdown();
 }
 
+// Track when next lesson starts for auto-refresh
+let nextLessonStartTimeForRefresh = null;
+let currentLessonEndTimeForRefresh = null;
+let autoRefreshInterval = null;
+
 // Load Timetable Data
-async function loadTimetable() {
+async function loadTimetable(useFastLoad = false) {
     try {
-        // Always use auto mode now (manual upload removed)
-        const response = await fetch(`/api/timetable?mode=auto`);
-        const data = await response.json();
+        let response, data;
+        
+        if (useFastLoad) {
+            // Fast initial load with static minimal data
+            response = await fetch('/static/fast_timetable.json');
+            data = await response.json();
+            
+            // Start background fetch for real data
+            setTimeout(() => loadTimetable(false), 100);
+        } else {
+            // Full load from API
+            response = await fetch(`/api/timetable?mode=auto`);
+            data = await response.json();
+        }
         
         // Update Current Lesson OneNote Link
         updateCurrentNotebook(data.current_lesson);
@@ -182,6 +380,7 @@ async function loadTimetable() {
             
             // Set the next lesson start time for countdown
             nextLessonStartTime = new Date(lesson.start);
+            nextLessonStartTimeForRefresh = new Date(lesson.start);
             
             const timeString = formatDateTime(lesson.start, lesson.end);
             
@@ -210,20 +409,22 @@ async function loadTimetable() {
             const cancelledClass = lesson.is_cancelled ? 'cancelled' : '';
             
             nextLessonDiv.innerHTML = `
-                <div class="lesson-title">${lesson.summary}</div>
-                ${locationHtml}
-                <div class="lesson-time">${timeString}</div>
-                <div class="lesson-countdown" id="lessonCountdown">Berechne...</div>
-                ${lesson.description ? `<div class="lesson-description">${lesson.description}</div>` : ''}
-                ${specialBadge}
+                <div class="lesson-card next-lesson-card ${cancelledClass}">
+                    <div class="lesson-title">${lesson.summary}</div>
+                    ${locationHtml}
+                    <div class="lesson-countdown" id="lessonCountdown">Berechne...</div>
+                    ${lesson.description ? `<div class="lesson-description">${lesson.description}</div>` : ''}
+                    ${specialBadge}
+                </div>
             `;
-            nextLessonDiv.className = `lesson-info ${cancelledClass}`;
+            nextLessonDiv.className = 'lesson-info compact';
             
             // Trigger initial countdown update
             updateCountdown();
         } else {
             nextLessonDiv.innerHTML = `<p class="no-data">Keine kommenden Lektionen gefunden.</p>`;
             nextLessonStartTime = null;
+            nextLessonStartTimeForRefresh = null;
         }
         
         // Display today's lessons
@@ -292,6 +493,13 @@ async function loadTimetable() {
         } else {
             examsListDiv.innerHTML = `<p class="no-data">Keine kommenden Prüfungen.</p>`;
         }
+        
+        // Check for exam notifications
+        checkExamNotifications(data.exams);
+        
+        // Setup auto-refresh when lesson starts/ends
+        setupAutoRefresh();
+        
     } catch (error) {
         console.error('Error loading timetable:', error);
         document.getElementById('nextLesson').innerHTML = 
@@ -299,6 +507,34 @@ async function loadTimetable() {
         document.getElementById('examsList').innerHTML = 
             `<p class="error-message">Fehler beim Laden der Prüfungen</p>`;
     }
+}
+
+// Setup auto-refresh when lesson starts or ends
+function setupAutoRefresh() {
+    // Clear existing interval
+    if (autoRefreshInterval) {
+        clearInterval(autoRefreshInterval);
+        autoRefreshInterval = null;
+    }
+    
+    // Check every second if we need to refresh
+    autoRefreshInterval = setInterval(() => {
+        const now = new Date();
+        
+        // Refresh when next lesson starts (becomes current lesson)
+        if (nextLessonStartTimeForRefresh && now >= nextLessonStartTimeForRefresh) {
+            console.log('Next lesson started - refreshing timetable');
+            loadTimetable(false);
+            nextLessonStartTimeForRefresh = null;
+        }
+        
+        // Refresh when current lesson ends
+        if (currentLessonEndTimeForRefresh && now >= currentLessonEndTimeForRefresh) {
+            console.log('Current lesson ended - refreshing timetable');
+            loadTimetable(false);
+            currentLessonEndTimeForRefresh = null;
+        }
+    }, 1000); // Check every second
 }
 
 // Load Weather Data
@@ -385,10 +621,23 @@ function formatDateTime(startISO, endISO) {
 
 // Initialize data on page load
 document.addEventListener('DOMContentLoaded', function() {
-    loadTimetable();
+    // Load saved language preference
+    const savedLang = localStorage.getItem('language') || 'de';
+    loadTranslations(savedLang);
+    document.getElementById('currentLang').textContent = savedLang.toUpperCase();
+    
+    // Load notification preference
+    const savedNotif = localStorage.getItem('notifications');
+    if (savedNotif === 'enabled') {
+        notificationsEnabled = true;
+        document.querySelector('.notify-btn').classList.add('active');
+    }
+    
+    // Use fast load for instant UI
+    loadTimetable(true);
     loadWeather();
     
-    // Refresh data periodically
-    setInterval(loadTimetable, 5 * 60 * 1000); // Every 5 minutes
+    // Refresh full data periodically (every 5 minutes)
+    setInterval(() => loadTimetable(false), 5 * 60 * 1000);
     setInterval(loadWeather, 10 * 60 * 1000);  // Every 10 minutes
 });
