@@ -14,6 +14,17 @@
                 <h1 data-i18n="logo">SuperGUI</h1>
             </div>
             
+            <!-- Compact Search Bar -->
+            <div class="header-search compact-search">
+                <input type="text" id="searchInput" placeholder="Suche..." class="search-input-compact" data-i18n-placeholder="search_placeholder">
+                <div class="search-buttons-compact">
+                    <button class="search-btn-compact google-btn" onclick="search('google')" title="Google">G</button>
+                    <button class="search-btn-compact chatgpt-btn" onclick="search('chatgpt')" title="ChatGPT">AI</button>
+                    <button class="search-btn-compact github-btn" onclick="search('github')" title="GitHub">GH</button>
+                    <button class="search-btn-compact brave-btn" onclick="search('brave')" title="Brave">B</button>
+                </div>
+            </div>
+            
             <!-- Language and Notification Controls -->
             <div class="controls">
                 <button class="lang-btn" onclick="toggleLanguage()" title="DE/EN">
@@ -39,11 +50,11 @@
 
         <!-- Compact Main Content -->
         <main class="main-content compact-main">
-            <!-- Single Row Layout -->
+            <!-- 4-Column Layout -->
             <div class="compact-row">
                 <!-- Current Lesson & Next Lesson Combined -->
                 <section class="card compact-card">
-                    <h2 data-i18n="current_notebook">Aktuelles / Nächstes</h2>
+                    <h2 data-i18n="current_notebook">Aktuell / Nächste</h2>
                     <div id="currentNotebook" class="current-notebook compact">
                         <p class="loading" data-i18n="loading">Lade...</p>
                     </div>
@@ -65,6 +76,14 @@
                     <h2 data-i18n="upcoming_exams">Prüfungen</h2>
                     <div id="examsList" class="exams-list compact">
                         <p class="loading" data-i18n="loading">Lade...</p>
+                    </div>
+                </section>
+                
+                <!-- Weather - Compact -->
+                <section class="card compact-card">
+                    <h2 data-i18n="weather">Wetter</h2>
+                    <div id="weatherContent" class="weather-content compact">
+                        <p class="loading" data-i18n="loading_weather">Lade...</p>
                     </div>
                 </section>
             </div>
