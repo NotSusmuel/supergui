@@ -27,43 +27,78 @@ updateClock(); // Initial call
 
 // Countdown Timer
 let nextLessonStartTime = null;
+let currentLessonEndTime = null;
 
 function updateCountdown() {
-    if (!nextLessonStartTime) return;
-    
-    const now = new Date();
-    const diff = nextLessonStartTime - now;
-    
-    if (diff <= 0) {
-        // Lesson has started or passed
-        const countdownDiv = document.getElementById('lessonCountdown');
-        if (countdownDiv) {
-            countdownDiv.textContent = 'Lektion beginnt jetzt!';
+    // Update next lesson countdown
+    if (nextLessonStartTime) {
+        const now = new Date();
+        const diff = nextLessonStartTime - now;
+        
+        if (diff <= 0) {
+            // Lesson has started or passed
+            const countdownDiv = document.getElementById('lessonCountdown');
+            if (countdownDiv) {
+                countdownDiv.textContent = 'Lektion beginnt jetzt!';
+            }
+        } else {
+            // Calculate time remaining
+            const days = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            // Format countdown
+            let countdownText = 'Beginnt in ';
+            if (days > 0) {
+                countdownText += `${days}d ${hours}h ${minutes}m`;
+            } else if (hours > 0) {
+                countdownText += `${hours}h ${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+                countdownText += `${minutes}m ${seconds}s`;
+            } else {
+                countdownText += `${seconds}s`;
+            }
+            
+            const countdownDiv = document.getElementById('lessonCountdown');
+            if (countdownDiv) {
+                countdownDiv.textContent = countdownText;
+            }
         }
-        return;
     }
     
-    // Calculate time remaining
-    const days = Math.floor(diff / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
-    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
-    
-    // Format countdown
-    let countdownText = 'Beginnt in ';
-    if (days > 0) {
-        countdownText += `${days}d ${hours}h ${minutes}m`;
-    } else if (hours > 0) {
-        countdownText += `${hours}h ${minutes}m ${seconds}s`;
-    } else if (minutes > 0) {
-        countdownText += `${minutes}m ${seconds}s`;
-    } else {
-        countdownText += `${seconds}s`;
-    }
-    
-    const countdownDiv = document.getElementById('lessonCountdown');
-    if (countdownDiv) {
-        countdownDiv.textContent = countdownText;
+    // Update current lesson end countdown
+    if (currentLessonEndTime) {
+        const now = new Date();
+        const diff = currentLessonEndTime - now;
+        
+        if (diff <= 0) {
+            // Lesson has ended
+            const endCountdownDiv = document.getElementById('currentLessonEndCountdown');
+            if (endCountdownDiv) {
+                endCountdownDiv.textContent = 'Lektion ist zu Ende!';
+            }
+        } else {
+            // Calculate time remaining
+            const hours = Math.floor(diff / (1000 * 60 * 60));
+            const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+            
+            // Format countdown
+            let countdownText = 'Endet in ';
+            if (hours > 0) {
+                countdownText += `${hours}h ${minutes}m ${seconds}s`;
+            } else if (minutes > 0) {
+                countdownText += `${minutes}m ${seconds}s`;
+            } else {
+                countdownText += `${seconds}s`;
+            }
+            
+            const endCountdownDiv = document.getElementById('currentLessonEndCountdown');
+            if (endCountdownDiv) {
+                endCountdownDiv.textContent = countdownText;
+            }
+        }
     }
 }
 
@@ -126,11 +161,18 @@ function updateCurrentNotebook(currentLesson) {
                 <p>Gerade kein Unterricht</p>
             </div>
         `;
+        // Clear current lesson end time
+        currentLessonEndTime = null;
         return;
     }
     
     const subject = currentLesson.subject;
     const onenoteLink = currentLesson.onenote_link;
+    
+    // Set current lesson end time for countdown
+    if (currentLesson.end) {
+        currentLessonEndTime = new Date(currentLesson.end);
+    }
     
     if (!onenoteLink) {
         // No notebook for this subject
@@ -141,8 +183,11 @@ function updateCurrentNotebook(currentLesson) {
                 </svg>
                 <p class="current-subject">${subject}</p>
                 <p class="no-notebook-text">Fach hat kein Notizbuch</p>
+                <div class="lesson-countdown" id="currentLessonEndCountdown">Berechne...</div>
             </div>
         `;
+        // Trigger countdown update
+        updateCountdown();
         return;
     }
     
@@ -151,6 +196,7 @@ function updateCurrentNotebook(currentLesson) {
         <div class="has-notebook">
             <p class="current-subject-small">Aktuelles Fach:</p>
             <p class="current-subject">${subject}</p>
+            <div class="lesson-countdown" id="currentLessonEndCountdown">Berechne...</div>
             <button class="notebook-btn" onclick="window.location.href='${onenoteLink}'">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M22 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h17c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 17V7h3v10H7zm12 0h-9V7h9v10z"/>
@@ -159,6 +205,8 @@ function updateCurrentNotebook(currentLesson) {
             </button>
         </div>
     `;
+    // Trigger countdown update
+    updateCountdown();
 }
 
 // Load Timetable Data

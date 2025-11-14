@@ -499,28 +499,6 @@ body::before {
     font-style: italic;
 }
 
-.auto-sync-info {
-    display: flex;
-    align-items: center;
-    gap: 10px;
-    padding: 12px 16px;
-    margin-bottom: 20px;
-    background: rgba(16, 185, 129, 0.15);
-    border: 1px solid rgba(16, 185, 129, 0.3);
-    border-radius: 12px;
-    color: var(--success);
-    font-size: 0.9rem;
-    font-weight: 500;
-}
-
-.sync-icon {
-    animation: rotate 2s linear infinite;
-}
-
-@keyframes rotate {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-}
 
 .lesson-info, .exam-item {
     padding: 18px;
@@ -593,10 +571,10 @@ body::before {
     background: rgba(99, 102, 241, 0.15);
     border-radius: 12px;
     text-align: center;
-    animation: glow 2s ease-in-out infinite;
+    animation: glowBox 2s ease-in-out infinite;
 }
 
-@keyframes glow {
+@keyframes glowBox {
     0%, 100% {
         box-shadow: 0 0 5px rgba(99, 102, 241, 0.3);
     }

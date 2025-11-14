@@ -10,7 +10,9 @@
 # Example: https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/YOUR_ID_HERE/timetable.ics
 #
 # IMPORTANT: This is YOUR PERSONAL timetable link! Keep it private.
-ICS_URL = ''
+# Timetable ICS URL
+# URL to automatically fetch timetable from KSR API
+ICS_URL = 'https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/dmbphs0g5i58gpwo7fxkja/timetable.ics'
 
 # OpenWeather API Key
 # -------------------

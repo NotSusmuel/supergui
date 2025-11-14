@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import re
+from threading import Lock
+import time as time_module
 
 # Load configuration from config.py (or config.py.example if config.py doesn't exist)
 try:
@@ -42,6 +44,14 @@ app.config['ICS_URL'] = ICS_URL
 
 # Ensure upload folder exists
 Path(app.config['UPLOAD_FOLDER']).mkdir(exist_ok=True)
+
+# Cache for timetable data to speed up loading
+_timetable_cache = {
+    'events': None,
+    'timestamp': 0,
+    'lock': Lock()
+}
+CACHE_DURATION = 300  # 5 minutes cache
 
 # Subject abbreviation mapping
 SUBJECT_MAPPING = {
@@ -321,26 +331,40 @@ def index():
 
 @app.route('/api/timetable')
 def get_timetable():
-    """API endpoint to get timetable data"""
+    """API endpoint to get timetable data with caching for performance"""
     # Check for mode parameter (auto or manual)
     mode = request.args.get('mode', 'auto')
     
     events = []
     csv_path = os.path.join(app.config['UPLOAD_FOLDER'], 'timetable.csv')
     
-    if mode == 'auto':
-        # Try to fetch from URL and convert to CSV
-        csv_file = fetch_and_convert_ics_to_csv(app.config['ICS_URL'])
+    # Check cache first for performance optimization
+    current_time = time_module.time()
+    with _timetable_cache['lock']:
+        cache_age = current_time - _timetable_cache['timestamp']
         
-        if csv_file and os.path.exists(csv_file):
-            events = parse_csv_timetable(csv_file)
-        elif os.path.exists(csv_path):
-            # Auto fetch failed, fallback to existing local CSV
-            events = parse_csv_timetable(csv_path)
-    else:
-        # Manual mode - use uploaded CSV file only
-        if os.path.exists(csv_path):
-            events = parse_csv_timetable(csv_path)
+        if _timetable_cache['events'] is not None and cache_age < CACHE_DURATION:
+            # Use cached data
+            events = _timetable_cache['events']
+        else:
+            # Cache expired or empty, fetch new data
+            if mode == 'auto':
+                # Try to fetch from URL and convert to CSV
+                csv_file = fetch_and_convert_ics_to_csv(app.config['ICS_URL'])
+                
+                if csv_file and os.path.exists(csv_file):
+                    events = parse_csv_timetable(csv_file)
+                elif os.path.exists(csv_path):
+                    # Auto fetch failed, fallback to existing local CSV
+                    events = parse_csv_timetable(csv_path)
+            else:
+                # Manual mode - use uploaded CSV file only
+                if os.path.exists(csv_path):
+                    events = parse_csv_timetable(csv_path)
+            
+            # Update cache
+            _timetable_cache['events'] = events
+            _timetable_cache['timestamp'] = current_time
     
     if not events:
         return jsonify({
