@@ -79,19 +79,23 @@ SUBJECT_MAPPING = {
 }
 
 # OneNote notebook links for each subject
+# IMPORTANT: Replace these with YOUR OWN OneNote notebook URLs
+# You can find these links by:
+# 1. Opening OneNote
+# 2. Right-clicking on the notebook
+# 3. Selecting "Copy Link to Notebook"
+# 4. Paste the link here in the format: 'onenote:https://...'
+# 
+# Example format:
+# 'Subject Name': 'onenote:https://YOUR-SCHOOL.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
+#
 ONENOTE_LINKS = {
-    'Französisch': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/Franais1-4Mfz25-29/SiteAssets/Fran%C3%A7ais%201-4Mfz%2025-29-Notizbuch',
-    'Chemie': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/Chemie_bshMfz2025-29/SiteAssets/Chemie_bsh%20Mfz%202025-29-Notizbuch',
-    'Mathematik': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/MathematikMfz2025-2029/SiteAssets/Mathematik%20Mfz%202025%20-%202029-Notizbuch',
-    'Wirtschaft und Recht': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/WRMfz2025-2026/SiteAssets/WR%20Mfz%202025-2026-Notizbuch',
-    'Geschichte': 'onenote:https://kantonsschuleromanshorn-my.sharepoint.com/personal/eng_ksr_ch/Documents/Kursnotizb%C3%BCcher/Geschichte%20Mfz%202025-2029',
-    'Biologie': 'onenote:https://kantonsschuleromanshorn-my.sharepoint.com/personal/sn_ksr_ch/Documents/Kursnotizb%C3%BCcher/Bio%20Mfz%202025-29',
-    'Englisch': 'onenote:https://kantonsschuleromanshorn-my.sharepoint.com/personal/wus_ksr_ch/Documents/Kursnotizb%C3%BCcher/Englisch%20Mf%202025-2029',
-    'Deutsch': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/DeutschMf2025-2029/SiteAssets/Deutsch%20Mf%202025-2029-Notizbuch',
-    'Informatik': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/InformatikMf2025-2029/SiteAssets/Informatik%20Mf%202025-2029-Notizbuch',
-    'Musik': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/MusicMf2025-2029/SiteAssets/Music%20Mf%202025-2029-Notizbuch',
-    'Geografie': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/GeographieMf2025-2029/SiteAssets/Geographie%20Mf%202025-2029-Notizbuch',
-    # Klassen-Team is general, not subject-specific
+    # Add your subject OneNote links here
+    # Example:
+    # 'Französisch': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
+    # 'Mathematik': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
+    # 'Deutsch': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
+    # Add more subjects as needed...
 }
 
 def get_subject_name(abbreviation):

@@ -1890,3 +1890,118 @@ body {
     background: transparent !important;
     border: none !important;
 }
+
+/* ====== MODERN HOVER ANIMATIONS ====== */
+/* Smooth transitions for all interactive elements */
+.compact-card,
+.today-lesson-item,
+.exam-item,
+.lesson-card,
+.notebook-btn,
+.lang-btn,
+.notify-btn,
+.search-button {
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Enhanced card hover with scale and glow */
+.compact-card:hover {
+    transform: translateY(-2px) scale(1.01) !important;
+    box-shadow: 
+        0 12px 32px rgba(99, 102, 241, 0.6),
+        0 0 40px rgba(99, 102, 241, 0.3) !important;
+    border-color: rgba(99, 102, 241, 0.8) !important;
+}
+
+/* Lesson item hover with slide and glow */
+.today-lesson-item:hover,
+.exam-item:hover {
+    transform: translateX(4px) scale(1.02) !important;
+    background: rgba(15, 23, 42, 0.6) !important;
+    box-shadow: 
+        -4px 0 16px rgba(99, 102, 241, 0.4),
+        0 4px 16px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Lesson card hover with pulse effect */
+.lesson-card:hover {
+    transform: scale(1.02);
+    box-shadow: 
+        0 8px 24px rgba(99, 102, 241, 0.5),
+        0 0 30px rgba(99, 102, 241, 0.2);
+}
+
+.current-lesson-card:hover {
+    box-shadow: 
+        0 8px 24px rgba(16, 185, 129, 0.6),
+        0 0 30px rgba(16, 185, 129, 0.3);
+}
+
+.next-lesson-card:hover {
+    box-shadow: 
+        0 8px 24px rgba(99, 102, 241, 0.6),
+        0 0 30px rgba(99, 102, 241, 0.3);
+}
+
+/* Button hover with lift and glow */
+.notebook-btn:hover {
+    transform: translateY(-3px) scale(1.05) !important;
+    box-shadow: 
+        0 6px 20px rgba(99, 102, 241, 0.5),
+        0 0 25px rgba(99, 102, 241, 0.3) !important;
+}
+
+.lang-btn:hover,
+.notify-btn:hover {
+    transform: translateY(-2px) scale(1.1);
+    box-shadow: 
+        0 4px 16px rgba(99, 102, 241, 0.4),
+        0 0 20px rgba(99, 102, 241, 0.2);
+}
+
+/* Search button hover effects */
+.search-button:hover {
+    transform: translateY(-2px) scale(1.1);
+    filter: brightness(1.2);
+    box-shadow: 
+        0 4px 12px currentColor,
+        0 0 20px currentColor;
+}
+
+/* Countdown timer pulse on hover */
+.lesson-countdown:hover {
+    animation: pulse 1s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    50% {
+        transform: scale(1.05);
+        opacity: 0.9;
+    }
+}
+
+/* Smooth active state */
+.compact-card:active {
+    transform: translateY(0) scale(0.98) !important;
+}
+
+.notebook-btn:active,
+.lang-btn:active,
+.notify-btn:active,
+.search-button:active {
+    transform: translateY(0) scale(0.95) !important;
+}
+
+/* Focus styles for accessibility */
+.compact-card:focus-within,
+.notebook-btn:focus,
+.lang-btn:focus,
+.notify-btn:focus,
+.search-button:focus {
+    outline: 2px solid rgba(99, 102, 241, 0.6);
+    outline-offset: 2px;
+}
