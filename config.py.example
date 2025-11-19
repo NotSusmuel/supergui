@@ -5,20 +5,21 @@
 
 # Timetable ICS URL
 # -----------------
-# Replace this with your personal KSR timetable URL
-# You can find your URL in the ISY portal under "Stundenplan"
-# Example: https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/YOUR_ID_HERE/timetable.ics
+# Replace 'YOUR_TIMETABLE_ID_HERE' with your personal KSR timetable ID
+# You can find your URL in the ISY portal under "Stundenplan" -> "ICS Export"
+# Example: https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/abc123xyz456/timetable.ics
 #
 # IMPORTANT: This is YOUR PERSONAL timetable link! Keep it private.
-ICS_URL = ''
+ICS_URL = 'https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/YOUR_TIMETABLE_ID_HERE/timetable.ics'
 
 # OpenWeather API Key
 # -------------------
 # Get your free API key from: https://openweathermap.org/api
 # Sign up, verify your email, and copy your API key here
+# Replace 'YOUR_OPENWEATHER_API_KEY_HERE' with your actual API key
 #
 # IMPORTANT: This is YOUR API key! Keep it private.
-OPENWEATHER_API_KEY = ''
+OPENWEATHER_API_KEY = 'YOUR_OPENWEATHER_API_KEY_HERE'
 
 # City for Weather
 # ----------------

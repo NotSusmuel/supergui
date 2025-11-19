@@ -7,6 +7,8 @@ import os
 from pathlib import Path
 from dotenv import load_dotenv
 import re
+from threading import Lock
+import time as time_module
 
 # Load configuration from config.py (or config.py.example if config.py doesn't exist)
 try:
@@ -43,6 +45,14 @@ app.config['ICS_URL'] = ICS_URL
 # Ensure upload folder exists
 Path(app.config['UPLOAD_FOLDER']).mkdir(exist_ok=True)
 
+# Cache for timetable data to speed up loading
+_timetable_cache = {
+    'events': None,
+    'timestamp': 0,
+    'lock': Lock()
+}
+CACHE_DURATION = 300  # 5 minutes cache
+
 # Subject abbreviation mapping
 SUBJECT_MAPPING = {
     'IF': 'Informatik',
@@ -69,19 +79,23 @@ SUBJECT_MAPPING = {
 }
 
 # OneNote notebook links for each subject
+# IMPORTANT: Replace these with YOUR OWN OneNote notebook URLs
+# You can find these links by:
+# 1. Opening OneNote
+# 2. Right-clicking on the notebook
+# 3. Selecting "Copy Link to Notebook"
+# 4. Paste the link here in the format: 'onenote:https://...'
+# 
+# Example format:
+# 'Subject Name': 'onenote:https://YOUR-SCHOOL.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
+#
 ONENOTE_LINKS = {
-    'Französisch': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/Franais1-4Mfz25-29/SiteAssets/Fran%C3%A7ais%201-4Mfz%2025-29-Notizbuch',
-    'Chemie': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/Chemie_bshMfz2025-29/SiteAssets/Chemie_bsh%20Mfz%202025-29-Notizbuch',
-    'Mathematik': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/MathematikMfz2025-2029/SiteAssets/Mathematik%20Mfz%202025%20-%202029-Notizbuch',
-    'Wirtschaft und Recht': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/WRMfz2025-2026/SiteAssets/WR%20Mfz%202025-2026-Notizbuch',
-    'Geschichte': 'onenote:https://kantonsschuleromanshorn-my.sharepoint.com/personal/eng_ksr_ch/Documents/Kursnotizb%C3%BCcher/Geschichte%20Mfz%202025-2029',
-    'Biologie': 'onenote:https://kantonsschuleromanshorn-my.sharepoint.com/personal/sn_ksr_ch/Documents/Kursnotizb%C3%BCcher/Bio%20Mfz%202025-29',
-    'Englisch': 'onenote:https://kantonsschuleromanshorn-my.sharepoint.com/personal/wus_ksr_ch/Documents/Kursnotizb%C3%BCcher/Englisch%20Mf%202025-2029',
-    'Deutsch': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/DeutschMf2025-2029/SiteAssets/Deutsch%20Mf%202025-2029-Notizbuch',
-    'Informatik': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/InformatikMf2025-2029/SiteAssets/Informatik%20Mf%202025-2029-Notizbuch',
-    'Musik': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/MusicMf2025-2029/SiteAssets/Music%20Mf%202025-2029-Notizbuch',
-    'Geografie': 'onenote:https://kantonsschuleromanshorn.sharepoint.com/sites/GeographieMf2025-2029/SiteAssets/Geographie%20Mf%202025-2029-Notizbuch',
-    # Klassen-Team is general, not subject-specific
+    # Add your subject OneNote links here
+    # Example:
+    # 'Französisch': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
+    # 'Mathematik': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
+    # 'Deutsch': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
+    # Add more subjects as needed...
 }
 
 def get_subject_name(abbreviation):
@@ -288,7 +302,7 @@ def get_current_lesson(events):
     return None
 
 def get_todays_lessons(events):
-    """Get all lessons for today"""
+    """Get all lessons for today that haven't ended yet"""
     zurich_tz = pytz.timezone('Europe/Zurich')
     now = datetime.now(zurich_tz)
     today_str = now.strftime('%Y%m%d')
@@ -298,7 +312,9 @@ def get_todays_lessons(events):
         # Check if the event starts on the same day (compare YYYYMMDD format)
         event_date_str = event['start'].strftime('%Y%m%d')
         if event_date_str == today_str:
-            todays.append(event)
+            # Only include lessons that haven't ended yet
+            if event['end'] > now:
+                todays.append(event)
     
     return todays
 
@@ -321,26 +337,40 @@ def index():
 
 @app.route('/api/timetable')
 def get_timetable():
-    """API endpoint to get timetable data"""
+    """API endpoint to get timetable data with caching for performance"""
     # Check for mode parameter (auto or manual)
     mode = request.args.get('mode', 'auto')
     
     events = []
     csv_path = os.path.join(app.config['UPLOAD_FOLDER'], 'timetable.csv')
     
-    if mode == 'auto':
-        # Try to fetch from URL and convert to CSV
-        csv_file = fetch_and_convert_ics_to_csv(app.config['ICS_URL'])
+    # Check cache first for performance optimization
+    current_time = time_module.time()
+    with _timetable_cache['lock']:
+        cache_age = current_time - _timetable_cache['timestamp']
         
-        if csv_file and os.path.exists(csv_file):
-            events = parse_csv_timetable(csv_file)
-        elif os.path.exists(csv_path):
-            # Auto fetch failed, fallback to existing local CSV
-            events = parse_csv_timetable(csv_path)
-    else:
-        # Manual mode - use uploaded CSV file only
-        if os.path.exists(csv_path):
-            events = parse_csv_timetable(csv_path)
+        if _timetable_cache['events'] is not None and cache_age < CACHE_DURATION:
+            # Use cached data
+            events = _timetable_cache['events']
+        else:
+            # Cache expired or empty, fetch new data
+            if mode == 'auto':
+                # Try to fetch from URL and convert to CSV
+                csv_file = fetch_and_convert_ics_to_csv(app.config['ICS_URL'])
+                
+                if csv_file and os.path.exists(csv_file):
+                    events = parse_csv_timetable(csv_file)
+                elif os.path.exists(csv_path):
+                    # Auto fetch failed, fallback to existing local CSV
+                    events = parse_csv_timetable(csv_path)
+            else:
+                # Manual mode - use uploaded CSV file only
+                if os.path.exists(csv_path):
+                    events = parse_csv_timetable(csv_path)
+            
+            # Update cache
+            _timetable_cache['events'] = events
+            _timetable_cache['timestamp'] = current_time
     
     if not events:
         return jsonify({
