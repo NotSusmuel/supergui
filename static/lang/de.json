@@ -47,5 +47,9 @@
   "weekly_schedule": "Wochenübersicht",
   "ai_assistant": "KI-Assistent",
   "ai_input_placeholder": "Stelle eine Frage...",
-  "ai_welcome": "Hallo! Wie kann ich dir helfen? Ich kann Fragen zu deinem Stundenplan, Prüfungen und mehr beantworten."
+  "ai_welcome": "Hallo! Wie kann ich dir helfen? Ich kann Fragen zu deinem Stundenplan, Prüfungen und mehr beantworten.",
+  "isy_login": "ISY Anmeldung",
+  "not_logged_in": "Nicht angemeldet",
+  "stay_signed_in": "Angemeldet bleiben",
+  "isy_messages": "Mitteilungen"
 }

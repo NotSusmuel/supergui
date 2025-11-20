@@ -904,3 +904,222 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(() => loadTimetable(false), 5 * 60 * 1000);
     setInterval(loadWeather, 10 * 60 * 1000);  // Every 10 minutes
 });
+
+// ISY Authentication Functions
+// =============================
+
+let isyAuthenticated = false;
+let isyUsername = null;
+
+async function checkISYStatus() {
+    try {
+        const response = await fetch('/api/isy/status');
+        const data = await response.json();
+        
+        isyAuthenticated = data.authenticated;
+        isyUsername = data.username;
+        
+        updateISYButton();
+        
+        if (isyAuthenticated) {
+            // Load messages if authenticated
+            loadISYMessages();
+        }
+    } catch (error) {
+        console.error('Error checking ISY status:', error);
+    }
+}
+
+function updateISYButton() {
+    const btn = document.getElementById('isyBtn');
+    if (isyAuthenticated) {
+        btn.classList.add('active');
+        btn.title = `ISY: ${isyUsername}`;
+    } else {
+        btn.classList.remove('active');
+        btn.title = 'ISY Login';
+    }
+}
+
+function toggleISYLogin() {
+    const modal = document.getElementById('isyModal');
+    if (modal.style.display === 'block') {
+        closeISYLogin();
+    } else {
+        openISYLogin();
+    }
+}
+
+function openISYLogin() {
+    const modal = document.getElementById('isyModal');
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    
+    updateISYLoginUI();
+}
+
+function closeISYLogin() {
+    const modal = document.getElementById('isyModal');
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+function updateISYLoginUI() {
+    const statusDiv = document.getElementById('isyStatus');
+    const loginBtn = document.querySelector('.isy-login-btn');
+    const logoutBtn = document.querySelector('.isy-logout-btn');
+    const usernameInput = document.getElementById('isyUsername');
+    const passwordInput = document.getElementById('isyPassword');
+    const messagesDiv = document.getElementById('isyMessages');
+    
+    if (isyAuthenticated) {
+        statusDiv.innerHTML = `<p>✅ Angemeldet als: <strong>${isyUsername}</strong></p>`;
+        loginBtn.style.display = 'none';
+        logoutBtn.style.display = 'block';
+        usernameInput.disabled = true;
+        passwordInput.disabled = true;
+        messagesDiv.style.display = 'block';
+    } else {
+        statusDiv.innerHTML = '<p>Nicht angemeldet</p>';
+        loginBtn.style.display = 'block';
+        logoutBtn.style.display = 'none';
+        usernameInput.disabled = false;
+        passwordInput.disabled = false;
+        messagesDiv.style.display = 'none';
+    }
+}
+
+async function submitISYLogin() {
+    const username = document.getElementById('isyUsername').value.trim();
+    const password = document.getElementById('isyPassword').value;
+    const staySignedIn = document.getElementById('isyStaySignedIn').checked;
+    const errorDiv = document.getElementById('isyError');
+    
+    if (!username || !password) {
+        errorDiv.textContent = 'Bitte Benutzername und Passwort eingeben';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    errorDiv.style.display = 'none';
+    
+    // Disable button during login
+    const loginBtn = document.querySelector('.isy-login-btn');
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Anmelden...';
+    
+    try {
+        const response = await fetch('/api/isy/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username: username,
+                password: password,
+                staySignedIn: staySignedIn
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            isyAuthenticated = true;
+            isyUsername = data.username;
+            
+            // Clear password field
+            document.getElementById('isyPassword').value = '';
+            
+            // Update UI
+            updateISYButton();
+            updateISYLoginUI();
+            
+            // Load messages
+            loadISYMessages();
+            
+            showToast('ISY Login', 'Erfolgreich angemeldet!');
+        } else {
+            errorDiv.textContent = data.error || 'Anmeldung fehlgeschlagen';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('ISY login error:', error);
+        errorDiv.textContent = 'Verbindungsfehler. Bitte später versuchen.';
+        errorDiv.style.display = 'block';
+    } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Anmelden';
+    }
+}
+
+async function submitISYLogout() {
+    try {
+        const response = await fetch('/api/isy/logout', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            isyAuthenticated = false;
+            isyUsername = null;
+            
+            // Clear form
+            document.getElementById('isyUsername').value = '';
+            document.getElementById('isyPassword').value = '';
+            document.getElementById('isyStaySignedIn').checked = false;
+            
+            // Update UI
+            updateISYButton();
+            updateISYLoginUI();
+            
+            showToast('ISY Logout', 'Erfolgreich abgemeldet');
+        }
+    } catch (error) {
+        console.error('ISY logout error:', error);
+    }
+}
+
+async function loadISYMessages() {
+    if (!isyAuthenticated) return;
+    
+    const messagesList = document.getElementById('isyMessagesList');
+    messagesList.innerHTML = '<p class="loading">Lade Mitteilungen...</p>';
+    
+    try {
+        const response = await fetch('/api/isy/messages');
+        const data = await response.json();
+        
+        if (response.ok) {
+            if (data.messages && data.messages.length > 0) {
+                messagesList.innerHTML = data.messages.map(msg => `
+                    <div class="isy-message-item">
+                        <div class="isy-message-title">${msg.title || 'Mitteilung'}</div>
+                        <div class="isy-message-content">${msg.content || msg.text || ''}</div>
+                        ${msg.date ? `<div class="isy-message-date">${msg.date}</div>` : ''}
+                    </div>
+                `).join('');
+            } else {
+                messagesList.innerHTML = '<p class="no-data">Keine Mitteilungen vorhanden</p>';
+            }
+        } else {
+            messagesList.innerHTML = '<p class="error-message">Fehler beim Laden der Mitteilungen</p>';
+        }
+    } catch (error) {
+        console.error('Error loading ISY messages:', error);
+        messagesList.innerHTML = '<p class="error-message">Fehler beim Laden der Mitteilungen</p>';
+    }
+}
+
+// Check ISY status on page load
+document.addEventListener('DOMContentLoaded', function() {
+    checkISYStatus();
+    
+    // Allow Enter key in ISY login form
+    const isyPassword = document.getElementById('isyPassword');
+    if (isyPassword) {
+        isyPassword.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitISYLogin();
+            }
+        });
+    }
+});

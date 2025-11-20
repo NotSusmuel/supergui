@@ -1,4 +1,4 @@
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, session
 from datetime import datetime, timedelta
 import pytz
 import csv
@@ -10,6 +10,8 @@ import re
 from threading import Lock
 import time as time_module
 import google.generativeai as genai
+import jwt
+from functools import wraps
 
 # Load configuration from config.py (or config.py.example if config.py doesn't exist)
 try:
@@ -49,6 +51,12 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['ICS_URL'] = ICS_URL
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# ISY.KSR.CH Configuration
+ISY_BASE_URL = 'https://isy.ksr.ch'
+ISY_LOGIN_URL = f'{ISY_BASE_URL}/api/login'  # To be confirmed by user
+ISY_DASHBOARD_URL = f'{ISY_BASE_URL}/dashboard'
 
 # Ensure upload folder exists
 Path(app.config['UPLOAD_FOLDER']).mkdir(exist_ok=True)
@@ -105,6 +113,81 @@ ONENOTE_LINKS = {
     # 'Deutsch': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
     # Add more subjects as needed...
 }
+
+# ISY Authentication Functions
+# =============================
+
+def verify_isy_token(token):
+    """
+    Verify ISY JWT token
+    Returns decoded token data if valid, None otherwise
+    """
+    try:
+        # Decode without verification (we trust ISY's signature)
+        # In production, you might want to verify the signature with ISY's public key
+        decoded = jwt.decode(token, options={"verify_signature": False})
+        
+        # Check if token is expired
+        if 'exp' in decoded:
+            exp_timestamp = decoded['exp']
+            if datetime.utcnow().timestamp() > exp_timestamp:
+                return None
+        
+        return decoded
+    except Exception as e:
+        print(f"Error verifying token: {e}")
+        return None
+
+def isy_login_required(f):
+    """
+    Decorator to require ISY authentication for routes
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Check if user has ISY token in session
+        isy_token = session.get('isy_token')
+        
+        if not isy_token:
+            return jsonify({'error': 'ISY login required', 'login_required': True}), 401
+        
+        # Verify token is still valid
+        token_data = verify_isy_token(isy_token)
+        if not token_data:
+            session.pop('isy_token', None)
+            return jsonify({'error': 'ISY session expired', 'login_required': True}), 401
+        
+        # Store username in request context
+        request.isy_username = token_data.get('username')
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
+def fetch_isy_messages(token):
+    """
+    Fetch messages from ISY using authenticated session
+    Returns list of messages or None on error
+    
+    NOTE: This is a placeholder. The actual implementation needs:
+    - The correct API endpoint URL
+    - The expected response format
+    """
+    try:
+        # TODO: Get actual messages endpoint from user
+        # messages_url = f'{ISY_BASE_URL}/api/messages'
+        
+        # headers = {
+        #     'Cookie': f'token={token}'
+        # }
+        # response = requests.get(messages_url, headers=headers, timeout=10)
+        # response.raise_for_status()
+        # 
+        # return response.json()
+        
+        # Placeholder return
+        return []
+    except Exception as e:
+        print(f"Error fetching ISY messages: {e}")
+        return None
 
 def get_subject_name(abbreviation):
     """Convert subject abbreviation to full name"""
@@ -377,6 +460,111 @@ def get_weekly_lessons(events):
 def index():
     """Render main page"""
     return render_template('index.html')
+
+@app.route('/api/isy/login', methods=['POST'])
+def isy_login():
+    """
+    ISY login endpoint
+    Accepts username and password, authenticates with ISY, and stores session
+    """
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        stay_signed_in = data.get('staySignedIn', False)
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password required'}), 400
+        
+        # TODO: Update with actual login endpoint once provided by user
+        # Currently using placeholder based on typical ISY structure
+        login_payload = {
+            'username': username,
+            'password': password
+        }
+        
+        # Make login request to ISY
+        response = requests.post(ISY_LOGIN_URL, json=login_payload, timeout=10)
+        
+        if response.status_code != 200:
+            return jsonify({'error': 'Invalid credentials'}), 401
+        
+        # Extract token from response cookies
+        token = response.cookies.get('token')
+        
+        if not token:
+            # Try to get from response body if not in cookies
+            response_data = response.json() if response.content else {}
+            token = response_data.get('token')
+        
+        if not token:
+            return jsonify({'error': 'Login failed - no token received'}), 500
+        
+        # Verify and decode token
+        token_data = verify_isy_token(token)
+        if not token_data:
+            return jsonify({'error': 'Invalid token received'}), 500
+        
+        # Store token in session
+        session['isy_token'] = token
+        session['isy_username'] = token_data.get('username')
+        session.permanent = stay_signed_in
+        
+        return jsonify({
+            'success': True,
+            'username': token_data.get('username'),
+            'redirect': ISY_DASHBOARD_URL
+        })
+        
+    except requests.exceptions.RequestException as e:
+        print(f"ISY login request failed: {e}")
+        return jsonify({'error': 'Could not connect to ISY server'}), 503
+    except Exception as e:
+        print(f"ISY login error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Login failed'}), 500
+
+@app.route('/api/isy/logout', methods=['POST'])
+def isy_logout():
+    """ISY logout endpoint - clears session"""
+    session.pop('isy_token', None)
+    session.pop('isy_username', None)
+    return jsonify({'success': True})
+
+@app.route('/api/isy/status')
+def isy_status():
+    """Check ISY authentication status"""
+    isy_token = session.get('isy_token')
+    
+    if not isy_token:
+        return jsonify({'authenticated': False})
+    
+    token_data = verify_isy_token(isy_token)
+    if not token_data:
+        session.pop('isy_token', None)
+        session.pop('isy_username', None)
+        return jsonify({'authenticated': False})
+    
+    return jsonify({
+        'authenticated': True,
+        'username': token_data.get('username')
+    })
+
+@app.route('/api/isy/messages')
+@isy_login_required
+def isy_messages():
+    """
+    Fetch ISY messages for authenticated user
+    NOTE: Placeholder - needs actual messages endpoint from user
+    """
+    token = session.get('isy_token')
+    messages = fetch_isy_messages(token)
+    
+    if messages is None:
+        return jsonify({'error': 'Failed to fetch messages'}), 500
+    
+    return jsonify({'messages': messages})
 
 @app.route('/api/timetable')
 def get_timetable():
