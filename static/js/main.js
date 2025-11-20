@@ -619,6 +619,269 @@ function formatDateTime(startISO, endISO) {
     }
 }
 
+// Weekly View Functions
+let weeklyViewOpen = false;
+
+async function toggleWeeklyView() {
+    const modal = document.getElementById('weeklyModal');
+    
+    if (!weeklyViewOpen) {
+        // Open modal and load data
+        modal.style.display = 'block';
+        weeklyViewOpen = true;
+        document.body.style.overflow = 'hidden'; // Prevent scrolling
+        
+        // Update button text
+        const btn = document.getElementById('showMoreBtn');
+        const span = btn.querySelector('span');
+        span.textContent = translations.show_less || 'Weniger anzeigen';
+        
+        await loadWeeklySchedule();
+    } else {
+        closeWeeklyView();
+    }
+}
+
+function closeWeeklyView() {
+    const modal = document.getElementById('weeklyModal');
+    modal.style.display = 'none';
+    weeklyViewOpen = false;
+    document.body.style.overflow = ''; // Restore scrolling
+    
+    // Update button text
+    const btn = document.getElementById('showMoreBtn');
+    const span = btn.querySelector('span');
+    span.textContent = translations.show_more || 'Mehr anzeigen';
+}
+
+async function loadWeeklySchedule() {
+    const weeklyContent = document.getElementById('weeklyContent');
+    weeklyContent.innerHTML = '<p class="loading">Lade Wochenübersicht...</p>';
+    
+    try {
+        const response = await fetch('/api/weekly?mode=auto');
+        const data = await response.json();
+        
+        if (data.message) {
+            weeklyContent.innerHTML = `<p class="no-data">${data.message}</p>`;
+            return;
+        }
+        
+        if (!data.weekly_schedule || data.weekly_schedule.length === 0) {
+            weeklyContent.innerHTML = '<p class="no-data">Keine Lektionen für diese Woche gefunden.</p>';
+            return;
+        }
+        
+        // Build HTML for weekly schedule
+        let html = '<div class="weekly-days">';
+        
+        data.weekly_schedule.forEach(day => {
+            html += `
+                <div class="weekly-day">
+                    <h3 class="weekly-day-header">${day.date}</h3>
+                    <div class="weekly-day-lessons">
+            `;
+            
+            if (day.lessons.length === 0) {
+                html += '<p class="no-lessons">Keine Lektionen</p>';
+            } else {
+                day.lessons.forEach(lesson => {
+                    const startTime = extractTimeFromISO(lesson.start);
+                    const endTime = lesson.end ? extractTimeFromISO(lesson.end) : '';
+                    const timeString = endTime ? `${startTime} - ${endTime}` : startTime;
+                    
+                    const locationHtml = lesson.location ? 
+                        `<span class="weekly-location">${lesson.location}</span>` : '';
+                    
+                    const examBadge = lesson.is_exam ? 
+                        `<span class="weekly-exam-badge">Prüfung</span>` : '';
+                    
+                    const specialBadge = lesson.special_note ? 
+                        `<span class="weekly-special-badge">${lesson.special_note}</span>` : '';
+                    
+                    const cancelledClass = lesson.is_cancelled ? 'weekly-lesson-cancelled' : '';
+                    
+                    html += `
+                        <div class="weekly-lesson-item ${cancelledClass}">
+                            <div class="weekly-lesson-time">${timeString}</div>
+                            <div class="weekly-lesson-info">
+                                <div class="weekly-lesson-title">${lesson.summary}</div>
+                                <div class="weekly-lesson-meta">
+                                    ${locationHtml}
+                                    ${examBadge}
+                                    ${specialBadge}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        weeklyContent.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error loading weekly schedule:', error);
+        weeklyContent.innerHTML = `<p class="error-message">Fehler beim Laden der Wochenübersicht: ${error.message}</p>`;
+    }
+}
+
+// AI Chat Functions
+let aiChatOpen = false;
+let aiConversationHistory = [];
+
+function openAIChat() {
+    const modal = document.getElementById('aiModal');
+    modal.style.display = 'block';
+    aiChatOpen = true;
+    document.body.style.overflow = 'hidden';
+    
+    // Initialize with welcome message if empty
+    const messagesDiv = document.getElementById('aiMessages');
+    if (messagesDiv.children.length === 0) {
+        addAIMessage('assistant', translations.ai_welcome || 'Hallo! Wie kann ich dir helfen? Ich kann Fragen zu deinem Stundenplan, Prüfungen und mehr beantworten.');
+    }
+    
+    // Focus input
+    document.getElementById('aiInput').focus();
+}
+
+function closeAIChat() {
+    const modal = document.getElementById('aiModal');
+    modal.style.display = 'none';
+    aiChatOpen = false;
+    document.body.style.overflow = '';
+}
+
+function addAIMessage(role, content) {
+    const messagesDiv = document.getElementById('aiMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `ai-message ${role}-message`;
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'ai-avatar';
+    avatar.innerHTML = role === 'user' ? 
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>' :
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'ai-message-content';
+    contentDiv.textContent = content;
+    
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(contentDiv);
+    messagesDiv.appendChild(messageDiv);
+    
+    // Scroll to bottom
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+async function sendAIMessage() {
+    const input = document.getElementById('aiInput');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    // Add user message
+    addAIMessage('user', message);
+    input.value = '';
+    
+    // Show typing indicator
+    const messagesDiv = document.getElementById('aiMessages');
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'ai-message assistant-message typing-indicator';
+    typingDiv.innerHTML = `
+        <div class="ai-avatar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+            </svg>
+        </div>
+        <div class="ai-message-content">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+        </div>
+    `;
+    messagesDiv.appendChild(typingDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    
+    try {
+        // Send message to backend
+        const response = await fetch('/api/ai/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: message,
+                history: aiConversationHistory
+            })
+        });
+        
+        const data = await response.json();
+        
+        // Remove typing indicator
+        typingDiv.remove();
+        
+        if (data.error) {
+            addAIMessage('assistant', `Fehler: ${data.error}`);
+        } else {
+            addAIMessage('assistant', data.response);
+            
+            // Update conversation history
+            aiConversationHistory.push({
+                role: 'user',
+                content: message
+            });
+            aiConversationHistory.push({
+                role: 'assistant',
+                content: data.response
+            });
+            
+            // Keep only last 10 messages to avoid token limits
+            if (aiConversationHistory.length > 20) {
+                aiConversationHistory = aiConversationHistory.slice(-20);
+            }
+        }
+    } catch (error) {
+        typingDiv.remove();
+        console.error('Error sending AI message:', error);
+        addAIMessage('assistant', 'Entschuldigung, es gab einen Fehler bei der Verarbeitung deiner Anfrage.');
+    }
+}
+
+// Allow Enter to send message (Shift+Enter for new line)
+document.addEventListener('DOMContentLoaded', function() {
+    const aiInput = document.getElementById('aiInput');
+    if (aiInput) {
+        aiInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendAIMessage();
+            }
+        });
+    }
+});
+
+// Close modals when clicking outside
+window.addEventListener('click', function(event) {
+    const weeklyModal = document.getElementById('weeklyModal');
+    const aiModal = document.getElementById('aiModal');
+    
+    if (event.target === weeklyModal) {
+        closeWeeklyView();
+    }
+    if (event.target === aiModal) {
+        closeAIChat();
+    }
+});
+
 // Initialize data on page load
 document.addEventListener('DOMContentLoaded', function() {
     // Load saved language preference

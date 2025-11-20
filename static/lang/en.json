@@ -41,5 +41,11 @@
   "seconds": "s",
   "enable_notifications": "Enable Notifications",
   "notifications_enabled": "Notifications enabled",
-  "notifications_disabled": "Notifications disabled"
+  "notifications_disabled": "Notifications disabled",
+  "show_more": "Show more",
+  "show_less": "Show less",
+  "weekly_schedule": "Weekly Overview",
+  "ai_assistant": "AI Assistant",
+  "ai_input_placeholder": "Ask a question...",
+  "ai_welcome": "Hello! How can I help you? I can answer questions about your timetable, exams and more."
 }

@@ -41,5 +41,11 @@
   "seconds": "s",
   "enable_notifications": "Benachrichtigungen aktivieren",
   "notifications_enabled": "Benachrichtigungen aktiv",
-  "notifications_disabled": "Benachrichtigungen deaktiviert"
+  "notifications_disabled": "Benachrichtigungen deaktiviert",
+  "show_more": "Mehr anzeigen",
+  "show_less": "Weniger anzeigen",
+  "weekly_schedule": "Wochenübersicht",
+  "ai_assistant": "KI-Assistent",
+  "ai_input_placeholder": "Stelle eine Frage...",
+  "ai_welcome": "Hallo! Wie kann ich dir helfen? Ich kann Fragen zu deinem Stundenplan, Prüfungen und mehr beantworten."
 }

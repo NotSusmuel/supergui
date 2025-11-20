@@ -9,12 +9,14 @@ from dotenv import load_dotenv
 import re
 from threading import Lock
 import time as time_module
+import google.generativeai as genai
 
 # Load configuration from config.py (or config.py.example if config.py doesn't exist)
 try:
     import config
     ICS_URL = config.ICS_URL if hasattr(config, 'ICS_URL') and config.ICS_URL else None
     OPENWEATHER_API_KEY = config.OPENWEATHER_API_KEY if hasattr(config, 'OPENWEATHER_API_KEY') and config.OPENWEATHER_API_KEY else None
+    GOOGLE_AI_API_KEY = config.GOOGLE_AI_API_KEY if hasattr(config, 'GOOGLE_AI_API_KEY') and config.GOOGLE_AI_API_KEY else None
     FLASK_ENV = config.FLASK_ENV if hasattr(config, 'FLASK_ENV') else 'development'
 except ImportError:
     # If config.py doesn't exist, try importing from config.py.example
@@ -27,6 +29,7 @@ except ImportError:
         spec.loader.exec_module(config)
         ICS_URL = config.ICS_URL if hasattr(config, 'ICS_URL') and config.ICS_URL else None
         OPENWEATHER_API_KEY = config.OPENWEATHER_API_KEY if hasattr(config, 'OPENWEATHER_API_KEY') and config.OPENWEATHER_API_KEY else None
+        GOOGLE_AI_API_KEY = config.GOOGLE_AI_API_KEY if hasattr(config, 'GOOGLE_AI_API_KEY') and config.GOOGLE_AI_API_KEY else None
         FLASK_ENV = config.FLASK_ENV if hasattr(config, 'FLASK_ENV') else 'development'
     except Exception:
         # Final fallback to environment variables
@@ -35,7 +38,12 @@ except ImportError:
             load_dotenv('.env.example')
         ICS_URL = os.getenv('ICS_URL')
         OPENWEATHER_API_KEY = os.getenv('OPENWEATHER_API_KEY')
+        GOOGLE_AI_API_KEY = os.getenv('GOOGLE_AI_API_KEY')
         FLASK_ENV = os.getenv('FLASK_ENV', 'development')
+
+# Configure Google AI
+if GOOGLE_AI_API_KEY:
+    genai.configure(api_key=GOOGLE_AI_API_KEY)
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
@@ -330,6 +338,41 @@ def get_upcoming_exams(events, count=3):
     # Return only the first 'count' exams
     return exams[:count]
 
+def get_weekly_lessons(events):
+    """Get all lessons for the current week (Monday to Sunday)"""
+    zurich_tz = pytz.timezone('Europe/Zurich')
+    now = datetime.now(zurich_tz)
+    
+    # Calculate start of week (Monday)
+    start_of_week = now - timedelta(days=now.weekday())
+    start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Calculate end of week (Sunday)
+    end_of_week = start_of_week + timedelta(days=7)
+    
+    # Filter events for this week
+    weekly_lessons = []
+    for event in events:
+        if start_of_week <= event['start'] < end_of_week:
+            weekly_lessons.append(event)
+    
+    # Group by day
+    days = {}
+    for lesson in weekly_lessons:
+        day_key = lesson['start'].strftime('%Y-%m-%d')
+        day_name = lesson['start'].strftime('%A, %d. %B %Y')
+        
+        if day_key not in days:
+            days[day_key] = {
+                'date': day_name,
+                'lessons': []
+            }
+        days[day_key]['lessons'].append(lesson)
+    
+    # Sort days and return as list
+    sorted_days = sorted(days.items(), key=lambda x: x[0])
+    return [{'date': day[1]['date'], 'lessons': day[1]['lessons']} for day in sorted_days]
+
 @app.route('/')
 def index():
     """Render main page"""
@@ -486,6 +529,75 @@ def get_weather():
             'message': 'Unable to connect to weather service. Please check your API key and internet connection.'
         }), 500
 
+@app.route('/api/weekly')
+def get_weekly():
+    """API endpoint to get weekly timetable data"""
+    mode = request.args.get('mode', 'auto')
+    
+    events = []
+    csv_path = os.path.join(app.config['UPLOAD_FOLDER'], 'timetable.csv')
+    
+    # Check cache first for performance optimization
+    current_time = time_module.time()
+    with _timetable_cache['lock']:
+        cache_age = current_time - _timetable_cache['timestamp']
+        
+        if _timetable_cache['events'] is not None and cache_age < CACHE_DURATION:
+            # Use cached data
+            events = _timetable_cache['events']
+        else:
+            # Cache expired or empty, fetch new data
+            if mode == 'auto':
+                # Try to fetch from URL and convert to CSV
+                csv_file = fetch_and_convert_ics_to_csv(app.config['ICS_URL'])
+                
+                if csv_file and os.path.exists(csv_file):
+                    events = parse_csv_timetable(csv_file)
+                elif os.path.exists(csv_path):
+                    # Auto fetch failed, fallback to existing local CSV
+                    events = parse_csv_timetable(csv_path)
+            else:
+                # Manual mode - use uploaded CSV file only
+                if os.path.exists(csv_path):
+                    events = parse_csv_timetable(csv_path)
+            
+            # Update cache
+            _timetable_cache['events'] = events
+            _timetable_cache['timestamp'] = current_time
+    
+    if not events:
+        return jsonify({
+            'weekly_schedule': [],
+            'message': 'Keine Stundenplan-Daten verfügbar.'
+        })
+    
+    weekly_schedule = get_weekly_lessons(events)
+    
+    # Format data for JSON response
+    weekly_data = []
+    for day in weekly_schedule:
+        day_lessons = []
+        for lesson in day['lessons']:
+            day_lessons.append({
+                'summary': lesson['summary'],
+                'start': lesson['start'].isoformat(),
+                'end': lesson['end'].isoformat() if lesson['end'] else None,
+                'description': lesson['description'] if lesson['description'] and lesson['description'] != 'None' else '',
+                'location': lesson['location'],
+                'is_exam': lesson['is_exam'],
+                'is_cancelled': lesson['is_cancelled'],
+                'special_note': lesson['special_note']
+            })
+        
+        weekly_data.append({
+            'date': day['date'],
+            'lessons': day_lessons
+        })
+    
+    return jsonify({
+        'weekly_schedule': weekly_data
+    })
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """Upload ICS file and convert to CSV"""
@@ -556,6 +668,102 @@ def upload_file():
             return jsonify({'message': 'CSV file uploaded successfully'})
     
     return jsonify({'error': 'Invalid file type. Please upload an ICS or CSV file.'}), 400
+
+@app.route('/api/ai/chat', methods=['POST'])
+def ai_chat():
+    """AI chat endpoint using Google Gemini"""
+    if not GOOGLE_AI_API_KEY:
+        return jsonify({
+            'error': 'Google AI API key not configured',
+            'response': 'Der KI-Assistent ist nicht konfiguriert. Bitte setze GOOGLE_AI_API_KEY in der Konfiguration.'
+        }), 500
+    
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '')
+        history = data.get('history', [])
+        
+        if not user_message:
+            return jsonify({'error': 'No message provided'}), 400
+        
+        # Get current timetable data for context
+        csv_path = os.path.join(app.config['UPLOAD_FOLDER'], 'timetable.csv')
+        events = []
+        
+        with _timetable_cache['lock']:
+            if _timetable_cache['events'] is not None:
+                events = _timetable_cache['events']
+            elif os.path.exists(csv_path):
+                events = parse_csv_timetable(csv_path)
+        
+        # Prepare context about the timetable
+        context = "Du bist ein hilfreicher Assistent für einen Schüler. Du hast Zugriff auf seinen Stundenplan.\n\n"
+        
+        if events:
+            next_lesson = get_next_lesson(events)
+            current_lesson = get_current_lesson(events)
+            todays_lessons = get_todays_lessons(events)
+            upcoming_exams = get_upcoming_exams(events)
+            
+            context += "AKTUELLE INFORMATIONEN:\n"
+            
+            if current_lesson:
+                context += f"Aktuelle Lektion: {current_lesson['summary']}"
+                if current_lesson['location']:
+                    context += f" im Raum {current_lesson['location']}"
+                context += f" (bis {current_lesson['end'].strftime('%H:%M')})\n"
+            
+            if next_lesson:
+                context += f"Nächste Lektion: {next_lesson['summary']}"
+                if next_lesson['location']:
+                    context += f" im Raum {next_lesson['location']}"
+                context += f" um {next_lesson['start'].strftime('%H:%M')}\n"
+            
+            if todays_lessons:
+                context += f"\nHeutige Lektionen ({len(todays_lessons)}):\n"
+                for lesson in todays_lessons[:5]:  # Limit to 5
+                    context += f"- {lesson['start'].strftime('%H:%M')}: {lesson['summary']}"
+                    if lesson['is_exam']:
+                        context += " (PRÜFUNG)"
+                    context += "\n"
+            
+            if upcoming_exams:
+                context += f"\nKommende Prüfungen:\n"
+                for exam in upcoming_exams:
+                    context += f"- {exam['start'].strftime('%d.%m.%Y %H:%M')}: {exam['summary']}\n"
+        
+        context += "\nBeantworte die Frage des Schülers freundlich und hilfreich auf Deutsch. Bei Fragen zum Stundenplan verwende die oben genannten Informationen."
+        
+        # Use Gemini Flash model (free tier)
+        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        
+        # Build conversation history for the model
+        chat_history = []
+        for msg in history[-10:]:  # Keep last 10 messages
+            chat_history.append({
+                'role': 'user' if msg['role'] == 'user' else 'model',
+                'parts': [msg['content']]
+            })
+        
+        # Start chat with history
+        chat = model.start_chat(history=chat_history)
+        
+        # Send message with context
+        full_message = f"{context}\n\nFrage: {user_message}"
+        response = chat.send_message(full_message)
+        
+        return jsonify({
+            'response': response.text
+        })
+        
+    except Exception as e:
+        print(f"Error in AI chat: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'AI service error',
+            'response': f'Entschuldigung, es gab einen Fehler: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     # Use environment variable to control debug mode

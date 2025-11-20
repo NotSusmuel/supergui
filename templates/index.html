@@ -83,6 +83,12 @@
                     <div id="todaysLessonsList" class="todays-list compact">
                         <p class="loading" data-i18n="loading">Lade...</p>
                     </div>
+                    <button class="show-more-btn" onclick="toggleWeeklyView()" id="showMoreBtn">
+                        <span data-i18n="show_more">Mehr anzeigen</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+                        </svg>
+                    </button>
                 </section>
 
                 <!-- Exams - Compact -->
@@ -103,6 +109,55 @@
             </div>
         </main>
     </div>
+
+    <!-- Weekly View Modal -->
+    <div id="weeklyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 data-i18n="weekly_schedule">Wochenübersicht</h2>
+                <button class="close-btn" onclick="closeWeeklyView()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="weeklyContent" class="weekly-content">
+                <p class="loading" data-i18n="loading">Lade...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Chat Modal -->
+    <div id="aiModal" class="modal">
+        <div class="modal-content ai-modal">
+            <div class="modal-header">
+                <h2 data-i18n="ai_assistant">KI-Assistent</h2>
+                <button class="close-btn" onclick="closeAIChat()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="aiChatContent" class="ai-chat-content">
+                <div id="aiMessages" class="ai-messages"></div>
+                <div class="ai-input-area">
+                    <textarea id="aiInput" placeholder="Stelle eine Frage..." rows="2" data-i18n-placeholder="ai_input_placeholder"></textarea>
+                    <button class="ai-send-btn" onclick="sendAIMessage()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Chat Button (Floating) -->
+    <button class="ai-chat-btn" onclick="openAIChat()" title="KI-Assistent">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+        </svg>
+    </button>
 
     <!-- Notification Sound (hidden) -->
     <audio id="notificationSound" preload="auto">
