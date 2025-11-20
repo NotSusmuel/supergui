@@ -830,8 +830,13 @@ async function sendAIMessage() {
         typingDiv.remove();
         
         if (data.error) {
-            addAIMessage('assistant', `Fehler: ${data.error}`);
-        } else {
+            // Show detailed error message
+            let errorMsg = data.error;
+            if (data.response) {
+                errorMsg = data.response; // Use the response field which has the German message
+            }
+            addAIMessage('assistant', errorMsg);
+        } else if (data.response) {
             addAIMessage('assistant', data.response);
             
             // Update conversation history
@@ -848,11 +853,13 @@ async function sendAIMessage() {
             if (aiConversationHistory.length > 20) {
                 aiConversationHistory = aiConversationHistory.slice(-20);
             }
+        } else {
+            addAIMessage('assistant', 'Entschuldigung, keine Antwort erhalten.');
         }
     } catch (error) {
         typingDiv.remove();
         console.error('Error sending AI message:', error);
-        addAIMessage('assistant', 'Entschuldigung, es gab einen Fehler bei der Verarbeitung deiner Anfrage.');
+        addAIMessage('assistant', 'Entschuldigung, es gab einen Verbindungsfehler. Bitte versuche es später erneut.');
     }
 }
 
@@ -1092,20 +1099,25 @@ async function loadISYMessages() {
             if (data.messages && data.messages.length > 0) {
                 messagesList.innerHTML = data.messages.map(msg => `
                     <div class="isy-message-item">
-                        <div class="isy-message-title">${msg.title || 'Mitteilung'}</div>
-                        <div class="isy-message-content">${msg.content || msg.text || ''}</div>
-                        ${msg.date ? `<div class="isy-message-date">${msg.date}</div>` : ''}
+                        <div class="isy-message-title">${msg.title || msg.id || 'Mitteilung'}</div>
+                        ${msg.dtDue ? `<div class="isy-message-date">Fällig: ${new Date(msg.dtDue).toLocaleDateString('de-DE')}</div>` : ''}
+                        ${msg.priority ? `<div class="isy-message-priority">Priorität: ${msg.priority}</div>` : ''}
+                        ${msg.completed ? '<div class="isy-message-completed">✅ Erledigt</div>' : ''}
                     </div>
                 `).join('');
             } else {
                 messagesList.innerHTML = '<p class="no-data">Keine Mitteilungen vorhanden</p>';
             }
         } else {
-            messagesList.innerHTML = '<p class="error-message">Fehler beim Laden der Mitteilungen</p>';
+            // Show error details for debugging
+            const errorMsg = data.error || 'Fehler beim Laden der Mitteilungen';
+            const errorDetail = data.message ? `<br><small>${data.message}</small>` : '';
+            messagesList.innerHTML = `<p class="error-message">${errorMsg}${errorDetail}</p>`;
+            console.error('ISY messages error:', data);
         }
     } catch (error) {
         console.error('Error loading ISY messages:', error);
-        messagesList.innerHTML = '<p class="error-message">Fehler beim Laden der Mitteilungen</p>';
+        messagesList.innerHTML = `<p class="error-message">Verbindungsfehler: ${error.message}</p>`;
     }
 }
 
