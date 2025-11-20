@@ -55,7 +55,7 @@ app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-
 
 # ISY.KSR.CH Configuration
 ISY_BASE_URL = 'https://isy.ksr.ch'
-ISY_LOGIN_URL = f'{ISY_BASE_URL}/api/login'  # To be confirmed by user
+ISY_API_URL = 'https://isy-api.ksr.ch/graphql'
 ISY_DASHBOARD_URL = f'{ISY_BASE_URL}/dashboard'
 
 # Ensure upload folder exists
@@ -162,31 +162,162 @@ def isy_login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
-def fetch_isy_messages(token):
+def get_isy_person_id(token):
     """
-    Fetch messages from ISY using authenticated session
-    Returns list of messages or None on error
-    
-    NOTE: This is a placeholder. The actual implementation needs:
-    - The correct API endpoint URL
-    - The expected response format
+    Get the person ID (IRI) for the authenticated user
+    Uses GraphQL to query the current user's person information
     """
     try:
-        # TODO: Get actual messages endpoint from user
-        # messages_url = f'{ISY_BASE_URL}/api/messages'
+        # GraphQL query to get current user's person info
+        graphql_query = """
+        query {
+          me {
+            id
+            person {
+              id
+              loginid
+              firstname
+              lastname
+            }
+          }
+        }
+        """
         
-        # headers = {
-        #     'Cookie': f'token={token}'
-        # }
-        # response = requests.get(messages_url, headers=headers, timeout=10)
-        # response.raise_for_status()
-        # 
-        # return response.json()
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+            'Accept': '*/*'
+        }
         
-        # Placeholder return
-        return []
+        payload = {
+            'query': graphql_query
+        }
+        
+        response = requests.post(ISY_API_URL, json=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        # Extract person ID from response
+        if 'data' in data and 'me' in data['data']:
+            person = data['data']['me'].get('person')
+            if person and 'id' in person:
+                return person['id']
+        
+        return None
+        
+    except Exception as e:
+        print(f"Error getting ISY person ID: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def fetch_isy_messages(token, person_id):
+    """
+    Fetch messages from ISY using GraphQL API with authenticated session
+    Returns list of messages or None on error
+    
+    Uses ISY's GraphQL API to fetch todos/messages
+    """
+    try:
+        # GraphQL query for fetching personal todos/messages
+        # Based on the user's provided example
+        graphql_query = """
+        query fetchPersonalTodos($me: String!, $segment: String!, $outputContext: String, $first: Int, $after: String, $last: Int, $before: String) {
+          messages(
+            context: {iri: $me, segment: $segment}
+            outputContext: $outputContext
+            first: $first
+            after: $after
+            last: $last
+            before: $before
+          ) {
+            pageInfo {
+              hasNextPage
+              hasPreviousPage
+              startCursor
+              endCursor
+              __typename
+            }
+            edges {
+              node {
+                _id
+                id
+                title
+                dtDue
+                recurrenceSettings
+                iCanDelete
+                me {
+                  id
+                  priorityTodo
+                  positionTodo
+                  completedWhen
+                  modified
+                  modifiedby
+                  created
+                  person {
+                    id
+                    loginid
+                    __typename
+                  }
+                  __typename
+                }
+                __typename
+              }
+              __typename
+            }
+            __typename
+          }
+        }
+        """
+        
+        # GraphQL variables
+        variables = {
+            "me": person_id,
+            "segment": "todosUserOpen",
+            "first": 50,
+            "after": None
+        }
+        
+        # Make GraphQL request
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+            'Accept': '*/*'
+        }
+        
+        payload = {
+            'operationName': 'fetchPersonalTodos',
+            'variables': variables,
+            'query': graphql_query
+        }
+        
+        response = requests.post(ISY_API_URL, json=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        
+        # Extract messages from GraphQL response
+        messages = []
+        if 'data' in data and 'messages' in data['data']:
+            edges = data['data']['messages'].get('edges', [])
+            for edge in edges:
+                node = edge.get('node', {})
+                messages.append({
+                    'id': node.get('_id'),
+                    'title': node.get('title'),
+                    'dtDue': node.get('dtDue'),
+                    'completed': node.get('me', {}).get('completedWhen') is not None,
+                    'priority': node.get('me', {}).get('priorityTodo'),
+                    'position': node.get('me', {}).get('positionTodo')
+                })
+        
+        return messages
+        
     except Exception as e:
         print(f"Error fetching ISY messages: {e}")
+        import traceback
+        traceback.print_exc()
         return None
 
 def get_subject_name(abbreviation):
@@ -466,6 +597,8 @@ def isy_login():
     """
     ISY login endpoint
     Accepts username and password, authenticates with ISY, and stores session
+    
+    Uses ISY's authentication_token endpoint
     """
     try:
         data = request.get_json()
@@ -476,26 +609,31 @@ def isy_login():
         if not username or not password:
             return jsonify({'error': 'Username and password required'}), 400
         
-        # TODO: Update with actual login endpoint once provided by user
-        # Currently using placeholder based on typical ISY structure
+        # ISY authentication endpoint
+        auth_url = 'https://isy-api.ksr.ch/authentication_token'
+        
+        # Prepare login payload
         login_payload = {
-            'username': username,
+            'loginid': username,
             'password': password
         }
         
         # Make login request to ISY
-        response = requests.post(ISY_LOGIN_URL, json=login_payload, timeout=10)
+        headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'Content-Type': 'application/json',
+            'Origin': 'https://isy.ksr.ch',
+            'Referer': 'https://isy.ksr.ch/'
+        }
+        
+        response = requests.post(auth_url, json=login_payload, headers=headers, timeout=10)
         
         if response.status_code != 200:
             return jsonify({'error': 'Invalid credentials'}), 401
         
-        # Extract token from response cookies
-        token = response.cookies.get('token')
-        
-        if not token:
-            # Try to get from response body if not in cookies
-            response_data = response.json() if response.content else {}
-            token = response_data.get('token')
+        # Extract token from response
+        response_data = response.json()
+        token = response_data.get('token')
         
         if not token:
             return jsonify({'error': 'Login failed - no token received'}), 500
@@ -555,11 +693,18 @@ def isy_status():
 @isy_login_required
 def isy_messages():
     """
-    Fetch ISY messages for authenticated user
-    NOTE: Placeholder - needs actual messages endpoint from user
+    Fetch ISY messages/todos for authenticated user using GraphQL API
     """
     token = session.get('isy_token')
-    messages = fetch_isy_messages(token)
+    
+    # Get person ID for the authenticated user
+    person_id = get_isy_person_id(token)
+    
+    if not person_id:
+        return jsonify({'error': 'Could not get user person ID'}), 500
+    
+    # Fetch messages using GraphQL
+    messages = fetch_isy_messages(token, person_id)
     
     if messages is None:
         return jsonify({'error': 'Failed to fetch messages'}), 500
