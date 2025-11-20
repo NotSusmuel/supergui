@@ -2132,32 +2132,66 @@ body {
 }
 
 .weekly-days {
-    display: flex;
-    flex-direction: column;
-    gap: 24px;
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 16px;
+    min-height: 400px;
+}
+
+@media (max-width: 1400px) {
+    .weekly-days {
+        grid-template-columns: repeat(4, 1fr);
+    }
+}
+
+@media (max-width: 1000px) {
+    .weekly-days {
+        grid-template-columns: repeat(3, 1fr);
+    }
+}
+
+@media (max-width: 768px) {
+    .weekly-days {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .weekly-days {
+        grid-template-columns: 1fr;
+    }
 }
 
 .weekly-day {
     background: rgba(255, 255, 255, 0.03);
     border: 1px solid rgba(99, 102, 241, 0.2);
     border-radius: 16px;
-    padding: 20px;
+    padding: 16px;
     transition: all 0.3s ease;
+    display: flex;
+    flex-direction: column;
+    min-height: 300px;
 }
 
 .weekly-day:hover {
     background: rgba(255, 255, 255, 0.05);
     border-color: rgba(99, 102, 241, 0.4);
-    transform: translateX(5px);
+    transform: translateY(-5px);
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
 }
 
 .weekly-day-header {
-    margin: 0 0 16px 0;
-    font-size: 18px;
+    margin: 0 0 12px 0;
+    font-size: 14px;
     font-weight: 600;
     color: var(--primary-color);
-    padding-bottom: 12px;
+    padding-bottom: 10px;
     border-bottom: 2px solid rgba(99, 102, 241, 0.2);
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
 }
 
 .weekly-day-lessons {
@@ -2168,12 +2202,14 @@ body {
 
 .weekly-lesson-item {
     display: flex;
-    gap: 16px;
-    padding: 14px;
+    flex-direction: column;
+    gap: 6px;
+    padding: 10px;
     background: rgba(255, 255, 255, 0.02);
     border: 1px solid rgba(99, 102, 241, 0.15);
-    border-radius: 12px;
+    border-radius: 10px;
     transition: all 0.3s ease;
+    font-size: 13px;
 }
 
 .weekly-lesson-item:hover {
@@ -2188,10 +2224,9 @@ body {
 }
 
 .weekly-lesson-time {
-    font-size: 14px;
+    font-size: 12px;
     font-weight: 600;
     color: var(--primary-color);
-    min-width: 100px;
 }
 
 .weekly-lesson-info {
@@ -2199,45 +2234,47 @@ body {
 }
 
 .weekly-lesson-title {
-    font-size: 15px;
+    font-size: 13px;
     font-weight: 600;
-    margin-bottom: 6px;
+    margin-bottom: 4px;
     color: #e2e8f0;
+    word-wrap: break-word;
 }
 
 .weekly-lesson-meta {
     display: flex;
-    gap: 10px;
+    gap: 6px;
     align-items: center;
     flex-wrap: wrap;
 }
 
 .weekly-location {
-    font-size: 13px;
+    font-size: 11px;
     color: #94a3b8;
-    padding: 3px 10px;
+    padding: 2px 6px;
     background: rgba(99, 102, 241, 0.1);
-    border-radius: 6px;
+    border-radius: 4px;
 }
 
 .weekly-exam-badge {
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 600;
     color: #f59e0b;
-    padding: 4px 10px;
+    padding: 2px 6px;
     background: rgba(245, 158, 11, 0.15);
-    border-radius: 6px;
+    border-radius: 4px;
     border: 1px solid rgba(245, 158, 11, 0.3);
 }
 
 .weekly-special-badge {
-    font-size: 12px;
+    font-size: 10px;
     font-weight: 600;
     color: #ef4444;
-    padding: 4px 10px;
+    padding: 2px 6px;
     background: rgba(239, 68, 68, 0.15);
-    border-radius: 6px;
+    border-radius: 4px;
     border: 1px solid rgba(239, 68, 68, 0.3);
+}
 }
 
 .no-lessons {

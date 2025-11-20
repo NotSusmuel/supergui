@@ -676,9 +676,16 @@ async function loadWeeklySchedule() {
         let html = '<div class="weekly-days">';
         
         data.weekly_schedule.forEach(day => {
+            // Format date more compactly for column view
+            // Extract weekday and date from "Monday, 18. November 2025" format
+            const dateParts = day.date.split(', ');
+            const weekday = dateParts[0];
+            const dateNum = dateParts[1] ? dateParts[1].split('.')[0] : '';
+            const compactDate = dateNum ? `${weekday}<br>${dateNum}.` : weekday;
+            
             html += `
                 <div class="weekly-day">
-                    <h3 class="weekly-day-header">${day.date}</h3>
+                    <h3 class="weekly-day-header">${compactDate}</h3>
                     <div class="weekly-day-lessons">
             `;
             
