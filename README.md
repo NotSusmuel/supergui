@@ -18,6 +18,22 @@ Eine moderne Flask-Web-App mit HTML/CSS für Stundenplan-Verwaltung, Wetter-Anze
 - Automatische Erkennung von Prüfungen
 - **Besondere Ereignisse**: Ausgefallene Lektionen, Raumwechsel, etc.
 - Farbcodierte Badges für verschiedene Event-Typen
+- **📆 Wochenübersicht**: "Mehr anzeigen" Button zeigt komplette Wochenansicht
+  - Alle Lektionen der aktuellen Woche
+  - Gruppiert nach Tagen
+  - Zeigt Zeiten, Räume, Prüfungen und Sonderhinweise
+  - Modernes Modal-Design mit Glassmorphismus
+
+### 🤖 KI-Assistent (NEU!)
+- **Google Gemini AI Integration**
+- Floating Chat-Button für schnellen Zugriff
+- Beantwortet Fragen zu:
+  - Deinem Stundenplan
+  - Kommenden Prüfungen
+  - Aktuellen und nächsten Lektionen
+- Kontext-bewusst: Kennt deinen aktuellen Stundenplan
+- Moderne Chat-Oberfläche mit Typing-Indikatoren
+- Unterstützt Tastaturkürzel (Enter zum Senden)
 
 ### 🌦️ Wetter für Romanshorn
 - Aktuelle Temperatur und Wetterbeschreibung
@@ -85,13 +101,22 @@ cp .env.example .env
 
 Die `.env.example` Datei enthält bereits einen funktionierenden API-Schlüssel für OpenWeather.
 
-**Für eigenen API Key (optional):**
+**Für eigenen OpenWeather API Key (optional):**
 1. Registrieren Sie sich auf [OpenWeatherMap](https://openweathermap.org/)
 2. Gehen Sie zu [API Keys](https://home.openweathermap.org/api_keys)
 3. Erstellen Sie einen neuen API Key (kostenlos)
 4. Ersetzen Sie den Key in der `.env` Datei
 
-**Hinweis:** Der vorhandene API-Schlüssel in `.env.example` funktioniert und muss nicht geändert werden.
+**Für Google AI / Gemini API Key (für KI-Assistent):**
+1. Besuchen Sie [Google AI Studio](https://ai.google.dev/)
+2. Melden Sie sich mit Ihrem Google-Konto an
+3. Erstellen Sie einen neuen API Key (kostenlos für gemini-2.0-flash-exp)
+4. Fügen Sie den Key in der `.env` Datei ein:
+   ```
+   GOOGLE_AI_API_KEY=IhrGoogleAIKeyHier
+   ```
+
+**Hinweis:** Der KI-Assistent funktioniert nur mit einem gültigen Google AI API Key.
 
 ### Schritt 5: Anwendung starten
 
@@ -169,10 +194,24 @@ Haupt-Dashboard-Seite
 ### `GET /api/timetable`
 Gibt Stundenplan-Daten zurück
 - Nächste Lektion
+- Aktuelle Lektion
+- Heutige Lektionen
 - Kommende Prüfungen
+
+### `GET /api/weekly`
+Gibt Wochenübersicht zurück
+- Alle Lektionen der aktuellen Woche
+- Gruppiert nach Tagen
+- Parameter: `mode` (auto/manual)
 
 ### `GET /api/weather`
 Gibt Wetterdaten für Romanshorn zurück
+
+### `POST /api/ai/chat`
+KI-Assistent Chat-Endpunkt
+- Parameter: `message` (Benutzernachricht), `history` (Gesprächsverlauf)
+- Nutzt Google Gemini 2.0 Flash
+- Kontext: Stundenplan-Daten
 
 ### `POST /upload`
 ICS-Datei hochladen
@@ -182,12 +221,15 @@ ICS-Datei hochladen
 
 - **Backend:** Flask (Python 3.8+)
 - **Frontend:** HTML5, CSS3, Vanilla JavaScript
-- **APIs:** OpenWeather API
+- **APIs:** 
+  - OpenWeather API (Wetterdaten)
+  - Google Gemini AI (KI-Assistent)
 - **Bibliotheken:**
   - icalendar: ICS-Datei-Parsing
   - requests: HTTP-Anfragen
   - python-dateutil: Datum/Zeit-Verwaltung
   - pytz: Zeitzone-Unterstützung
+  - google-generativeai: Google AI Integration
 
 ## Design
 
