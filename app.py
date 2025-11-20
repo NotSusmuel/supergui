@@ -695,21 +695,37 @@ def isy_messages():
     """
     Fetch ISY messages/todos for authenticated user using GraphQL API
     """
-    token = session.get('isy_token')
-    
-    # Get person ID for the authenticated user
-    person_id = get_isy_person_id(token)
-    
-    if not person_id:
-        return jsonify({'error': 'Could not get user person ID'}), 500
-    
-    # Fetch messages using GraphQL
-    messages = fetch_isy_messages(token, person_id)
-    
-    if messages is None:
-        return jsonify({'error': 'Failed to fetch messages'}), 500
-    
-    return jsonify({'messages': messages})
+    try:
+        token = session.get('isy_token')
+        
+        # Get person ID for the authenticated user
+        person_id = get_isy_person_id(token)
+        
+        if not person_id:
+            return jsonify({
+                'error': 'Could not get user person ID',
+                'message': 'Failed to fetch person information from ISY. Please try logging in again.'
+            }), 500
+        
+        # Fetch messages using GraphQL
+        messages = fetch_isy_messages(token, person_id)
+        
+        if messages is None:
+            return jsonify({
+                'error': 'Failed to fetch messages',
+                'message': 'Error communicating with ISY GraphQL API'
+            }), 500
+        
+        return jsonify({'messages': messages})
+        
+    except Exception as e:
+        print(f"Error in isy_messages endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'Internal server error',
+            'message': str(e)
+        }), 500
 
 @app.route('/api/timetable')
 def get_timetable():
@@ -1067,8 +1083,8 @@ def ai_chat():
         
         context += "\nBeantworte die Frage des Schülers freundlich und hilfreich auf Deutsch. Bei Fragen zum Stundenplan verwende die oben genannten Informationen."
         
-        # Use Gemini Flash model (free tier)
-        model = genai.GenerativeModel('gemini-2.0-flash-exp')
+        # Use Gemini Flash Lite model (free tier)
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
         
         # Build conversation history for the model
         chat_history = []
