@@ -1,5 +1,5 @@
-from flask import Flask, render_template, jsonify, request
-from datetime import datetime, timedelta
+from flask import Flask, render_template, jsonify, request, session
+from datetime import datetime, timedelta, timezone
 import pytz
 import csv
 import requests
@@ -9,12 +9,16 @@ from dotenv import load_dotenv
 import re
 from threading import Lock
 import time as time_module
+import google.generativeai as genai
+import jwt
+from functools import wraps
 
 # Load configuration from config.py (or config.py.example if config.py doesn't exist)
 try:
     import config
     ICS_URL = config.ICS_URL if hasattr(config, 'ICS_URL') and config.ICS_URL else None
     OPENWEATHER_API_KEY = config.OPENWEATHER_API_KEY if hasattr(config, 'OPENWEATHER_API_KEY') and config.OPENWEATHER_API_KEY else None
+    GOOGLE_AI_API_KEY = config.GOOGLE_AI_API_KEY if hasattr(config, 'GOOGLE_AI_API_KEY') and config.GOOGLE_AI_API_KEY else None
     FLASK_ENV = config.FLASK_ENV if hasattr(config, 'FLASK_ENV') else 'development'
 except ImportError:
     # If config.py doesn't exist, try importing from config.py.example
@@ -27,6 +31,7 @@ except ImportError:
         spec.loader.exec_module(config)
         ICS_URL = config.ICS_URL if hasattr(config, 'ICS_URL') and config.ICS_URL else None
         OPENWEATHER_API_KEY = config.OPENWEATHER_API_KEY if hasattr(config, 'OPENWEATHER_API_KEY') and config.OPENWEATHER_API_KEY else None
+        GOOGLE_AI_API_KEY = config.GOOGLE_AI_API_KEY if hasattr(config, 'GOOGLE_AI_API_KEY') and config.GOOGLE_AI_API_KEY else None
         FLASK_ENV = config.FLASK_ENV if hasattr(config, 'FLASK_ENV') else 'development'
     except Exception:
         # Final fallback to environment variables
@@ -35,12 +40,23 @@ except ImportError:
             load_dotenv('.env.example')
         ICS_URL = os.getenv('ICS_URL')
         OPENWEATHER_API_KEY = os.getenv('OPENWEATHER_API_KEY')
+        GOOGLE_AI_API_KEY = os.getenv('GOOGLE_AI_API_KEY')
         FLASK_ENV = os.getenv('FLASK_ENV', 'development')
+
+# Configure Google AI
+if GOOGLE_AI_API_KEY:
+    genai.configure(api_key=GOOGLE_AI_API_KEY)
 
 app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 16 * 1024 * 1024  # 16MB max file size
 app.config['ICS_URL'] = ICS_URL
+app.config['SECRET_KEY'] = os.getenv('FLASK_SECRET_KEY', 'dev-secret-key-change-in-production')
+
+# ISY.KSR.CH Configuration
+ISY_BASE_URL = 'https://isy.ksr.ch'
+ISY_API_URL = 'https://isy-api.ksr.ch/graphql'
+ISY_DASHBOARD_URL = f'{ISY_BASE_URL}/dashboard'
 
 # Ensure upload folder exists
 Path(app.config['UPLOAD_FOLDER']).mkdir(exist_ok=True)
@@ -97,6 +113,284 @@ ONENOTE_LINKS = {
     # 'Deutsch': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
     # Add more subjects as needed...
 }
+
+# ISY Authentication Functions
+# =============================
+
+def verify_isy_token(token):
+    """
+    Verify ISY JWT token
+    Returns decoded token data if valid, None otherwise
+    """
+    try:
+        # Decode without verification (we trust ISY's signature)
+        # In production, you might want to verify the signature with ISY's public key
+        decoded = jwt.decode(token, options={"verify_signature": False})
+        
+        # Check if token is expired
+        if 'exp' in decoded:
+            exp_timestamp = decoded['exp']
+            if datetime.now(timezone.utc).timestamp() > exp_timestamp:
+                print(f"Token expired at {datetime.fromtimestamp(exp_timestamp, timezone.utc)}")
+                return None
+        
+        return decoded
+    except Exception as e:
+        print(f"Error verifying token: {e}")
+        return None
+
+def isy_login_required(f):
+    """
+    Decorator to require ISY authentication for routes
+    """
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        # Check if user has ISY token in session
+        isy_token = session.get('isy_token')
+        
+        if not isy_token:
+            return jsonify({'error': 'ISY login required', 'login_required': True}), 401
+        
+        # Verify token is still valid
+        token_data = verify_isy_token(isy_token)
+        if not token_data:
+            session.pop('isy_token', None)
+            return jsonify({'error': 'ISY session expired', 'login_required': True}), 401
+        
+        # Store username in request context
+        request.isy_username = token_data.get('username')
+        
+        return f(*args, **kwargs)
+    return decorated_function
+
+def get_isy_person_id(token):
+    """
+    Get the person ID (IRI) for the authenticated user
+    
+    Note: ISY GraphQL doesn't support querying by username or 'me' field,
+    so we use a hardcoded person ID. Update this value in config.py if needed.
+    """
+    try:
+        # First, verify the token is not expired
+        token_data = verify_isy_token(token)
+        if not token_data:
+            print("Token verification failed - token may be expired")
+            return None
+        
+        # Decode JWT token to get username for logging
+        try:
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            username = decoded.get('username')
+            print(f"ISY Login - Username: {username}")
+        except Exception as e:
+            print(f"Error decoding JWT: {e}")
+            # Continue anyway - we don't need username
+        
+        # Hardcoded person ID since ISY GraphQL doesn't support lookup queries
+        # The GraphQL schema doesn't support people(loginid:) or me queries
+        # If you're a different user, find your person ID in ISY network requests
+        # and update it here or in config.py
+        person_id = "/people/4064"
+        print(f"Using person ID: {person_id}")
+        return person_id
+    
+    except Exception as e:
+        print(f"Error getting person ID: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def get_person_id_from_me(token):
+    """
+    Fallback method to get person ID using 'me' query
+    """
+    try:
+        graphql_query = """
+        query {
+          me {
+            id
+            person {
+              id
+              _id
+              loginid
+            }
+          }
+        }
+        """
+        
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+            'Accept': '*/*'
+        }
+        
+        payload = {
+            'query': graphql_query
+        }
+        
+        print(f"Trying 'me' query fallback...")
+        response = requests.post(ISY_API_URL, json=payload, headers=headers, timeout=10)
+        
+        response.raise_for_status()
+        
+        data = response.json()
+        print(f"Me query response: {data}")
+        
+        # Extract person ID from response
+        if 'data' in data and 'me' in data['data']:
+            me_data = data['data']['me']
+            
+            # Try to get person ID from me.person.id
+            person = me_data.get('person')
+            if person and 'id' in person:
+                person_id = person['id']
+                print(f"Found person ID from me.person.id: {person_id}")
+                return person_id
+            
+            # Sometimes the person IRI is in the me.id field itself
+            if 'id' in me_data:
+                me_id = me_data['id']
+                print(f"Using me.id as fallback: {me_id}")
+                return me_id
+        
+        print("Could not extract person ID from response")
+        return None
+        
+    except Exception as e:
+        print(f"Error getting ISY person ID: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+def fetch_isy_messages(token, person_id):
+    """
+    Fetch messages from ISY using GraphQL API with authenticated session
+    Returns list of messages or None on error
+    
+    Uses ISY's GraphQL API to fetch messages with full details
+    """
+    try:
+        # GraphQL query for fetching messages with all important fields
+        graphql_query = """
+        query fetchMessages($me: String!, $first: Int, $after: String) {
+          messages(
+            context: {iri: $me}
+            first: $first
+            after: $after
+            order: {visibleTo: "DESC"}
+          ) {
+            pageInfo {
+              hasNextPage
+              hasPreviousPage
+              startCursor
+              endCursor
+            }
+            edges {
+              node {
+                _id
+                id
+                title
+                subject
+                body
+                status
+                priority
+                dtFrom
+                dtTo
+                visibleFrom
+                visibleTo
+                dtDue
+                shownIn
+                authLevel
+                accomplished
+                me {
+                  id
+                  readWhen
+                  seenWhen
+                  archivedWhen
+                  priorityTodo
+                  positionTodo
+                  completedWhen
+                  modified
+                }
+              }
+            }
+          }
+        }
+        """
+        
+        # GraphQL variables
+        variables = {
+            "me": person_id,
+            "first": 100,
+            "after": None
+        }
+        
+        # Make GraphQL request
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+            'Accept': '*/*'
+        }
+        
+        payload = {
+            'operationName': 'fetchMessages',
+            'variables': variables,
+            'query': graphql_query
+        }
+        
+        print(f"Fetching ISY messages for person: {person_id}")
+        response = requests.post(ISY_API_URL, json=payload, headers=headers, timeout=10)
+        response.raise_for_status()
+        
+        data = response.json()
+        print(f"ISY API Response: {data}")
+        
+        # Check for GraphQL errors
+        if 'errors' in data:
+            print(f"GraphQL errors: {data['errors']}")
+            return None
+        
+        # Extract messages from GraphQL response
+        messages = []
+        if 'data' in data and 'messages' in data['data']:
+            edges = data['data']['messages'].get('edges', [])
+            print(f"Found {len(edges)} messages")
+            for edge in edges:
+                node = edge.get('node', {})
+                me = node.get('me', {})
+                messages.append({
+                    'id': node.get('_id'),
+                    'title': node.get('title', 'Keine Titel'),
+                    'subject': node.get('subject'),
+                    'body': node.get('body'),
+                    'priority': node.get('priority', 0),
+                    'status': node.get('status'),
+                    'dtFrom': node.get('dtFrom'),
+                    'dtTo': node.get('dtTo'),
+                    'visibleFrom': node.get('visibleFrom'),
+                    'visibleTo': node.get('visibleTo'),
+                    'dtDue': node.get('dtDue'),
+                    'shownIn': node.get('shownIn'),
+                    'accomplished': node.get('accomplished'),
+                    'completed': me.get('completedWhen') is not None,
+                    'completedWhen': me.get('completedWhen'),
+                    'readWhen': me.get('readWhen'),
+                    'seenWhen': me.get('seenWhen'),
+                    'archivedWhen': me.get('archivedWhen'),
+                    'priorityTodo': me.get('priorityTodo'),
+                    'positionTodo': me.get('positionTodo')
+                })
+        else:
+            print(f"No messages data in response: {data}")
+        
+        return messages
+        
+    except Exception as e:
+        print(f"Error fetching ISY messages: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
 
 def get_subject_name(abbreviation):
     """Convert subject abbreviation to full name"""
@@ -330,10 +624,383 @@ def get_upcoming_exams(events, count=3):
     # Return only the first 'count' exams
     return exams[:count]
 
+def get_weekly_lessons(events):
+    """Get all lessons for the current week (Monday to Sunday)"""
+    zurich_tz = pytz.timezone('Europe/Zurich')
+    now = datetime.now(zurich_tz)
+    
+    # Calculate start of week (Monday)
+    start_of_week = now - timedelta(days=now.weekday())
+    start_of_week = start_of_week.replace(hour=0, minute=0, second=0, microsecond=0)
+    
+    # Calculate end of week (Sunday)
+    end_of_week = start_of_week + timedelta(days=7)
+    
+    # Filter events for this week
+    weekly_lessons = []
+    for event in events:
+        if start_of_week <= event['start'] < end_of_week:
+            weekly_lessons.append(event)
+    
+    # Group by day
+    days = {}
+    for lesson in weekly_lessons:
+        day_key = lesson['start'].strftime('%Y-%m-%d')
+        day_name = lesson['start'].strftime('%A, %d. %B %Y')
+        
+        if day_key not in days:
+            days[day_key] = {
+                'date': day_name,
+                'lessons': []
+            }
+        days[day_key]['lessons'].append(lesson)
+    
+    # Sort days and return as list
+    sorted_days = sorted(days.items(), key=lambda x: x[0])
+    return [{'date': day[1]['date'], 'lessons': day[1]['lessons']} for day in sorted_days]
+
 @app.route('/')
 def index():
     """Render main page"""
     return render_template('index.html')
+
+@app.route('/api/isy/login', methods=['POST'])
+def isy_login():
+    """
+    ISY login endpoint
+    Accepts username and password, authenticates with ISY, and stores session
+    
+    Uses ISY's authentication_token endpoint
+    """
+    try:
+        data = request.get_json()
+        username = data.get('username')
+        password = data.get('password')
+        stay_signed_in = data.get('staySignedIn', False)
+        
+        if not username or not password:
+            return jsonify({'error': 'Username and password required'}), 400
+        
+        # ISY authentication endpoint
+        auth_url = 'https://isy-api.ksr.ch/authentication_token'
+        
+        # Prepare login payload
+        login_payload = {
+            'loginid': username,
+            'password': password
+        }
+        
+        # Make login request to ISY
+        headers = {
+            'Accept': 'application/json, text/plain, */*',
+            'Content-Type': 'application/json',
+            'Origin': 'https://isy.ksr.ch',
+            'Referer': 'https://isy.ksr.ch/'
+        }
+        
+        response = requests.post(auth_url, json=login_payload, headers=headers, timeout=10)
+        
+        if response.status_code != 200:
+            return jsonify({'error': 'Invalid credentials'}), 401
+        
+        # Extract token from response
+        response_data = response.json()
+        token = response_data.get('token')
+        
+        if not token:
+            return jsonify({'error': 'Login failed - no token received'}), 500
+        
+        # Verify and decode token
+        token_data = verify_isy_token(token)
+        if not token_data:
+            return jsonify({'error': 'Invalid token received'}), 500
+        
+        # Store token in session
+        session['isy_token'] = token
+        session['isy_username'] = token_data.get('username')
+        session.permanent = stay_signed_in
+        
+        return jsonify({
+            'success': True,
+            'username': token_data.get('username'),
+            'redirect': ISY_DASHBOARD_URL
+        })
+        
+    except requests.exceptions.RequestException as e:
+        print(f"ISY login request failed: {e}")
+        return jsonify({'error': 'Could not connect to ISY server'}), 503
+    except Exception as e:
+        print(f"ISY login error: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': 'Login failed'}), 500
+
+@app.route('/api/isy/logout', methods=['POST'])
+def isy_logout():
+    """ISY logout endpoint - clears session"""
+    session.pop('isy_token', None)
+    session.pop('isy_username', None)
+    return jsonify({'success': True})
+
+@app.route('/api/isy/status')
+def isy_status():
+    """Check ISY authentication status"""
+    isy_token = session.get('isy_token')
+    
+    if not isy_token:
+        return jsonify({'authenticated': False})
+    
+    token_data = verify_isy_token(isy_token)
+    if not token_data:
+        session.pop('isy_token', None)
+        session.pop('isy_username', None)
+        return jsonify({'authenticated': False})
+    
+    return jsonify({
+        'authenticated': True,
+        'username': token_data.get('username')
+    })
+
+@app.route('/api/isy/messages')
+@isy_login_required
+def isy_messages():
+    """
+    Fetch ISY messages/todos for authenticated user using GraphQL API
+    """
+    try:
+        token = session.get('isy_token')
+        
+        # Get person ID for the authenticated user
+        person_id = get_isy_person_id(token)
+        
+        if not person_id:
+            # Check if token is expired
+            token_data = verify_isy_token(token)
+            if not token_data:
+                # Token expired, clear session and return auth error
+                session.pop('isy_token', None)
+                session.pop('isy_username', None)
+                return jsonify({
+                    'error': 'ISY session expired',
+                    'message': 'Your ISY login has expired. Please log in again.',
+                    'login_required': True
+                }), 401
+            
+            return jsonify({
+                'error': 'Could not get user person ID',
+                'message': 'Failed to fetch person information from ISY. Please try logging in again.'
+            }), 500
+        
+        # Fetch messages using GraphQL
+        messages = fetch_isy_messages(token, person_id)
+        
+        if messages is None:
+            return jsonify({
+                'error': 'Failed to fetch messages',
+                'message': 'Error communicating with ISY GraphQL API'
+            }), 500
+        
+        return jsonify({'messages': messages})
+        
+    except Exception as e:
+        print(f"Error in isy_messages endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'Internal server error',
+            'message': str(e)
+        }), 500
+
+@app.route('/api/isy/dashboard-messages')
+@isy_login_required
+def isy_dashboard_messages():
+    """
+    Fetch inbox messages for dashboard display using GraphQL API
+    This uses the getInboxMessages query with the user's person ID
+    """
+    try:
+        token = session.get('isy_token')
+        
+        # Get person ID for the authenticated user
+        person_id = get_isy_person_id(token)
+        
+        if not person_id:
+            # Check if token is expired
+            token_data = verify_isy_token(token)
+            if not token_data:
+                # Token expired, clear session and return auth error
+                session.pop('isy_token', None)
+                session.pop('isy_username', None)
+                return jsonify({
+                    'error': 'ISY session expired',
+                    'message': 'Your ISY login has expired. Please log in again.',
+                    'login_required': True
+                }), 401
+            
+            return jsonify({
+                'error': 'Could not get user person ID',
+                'message': 'Failed to fetch person information from ISY. Please try logging in again.'
+            }), 500
+        
+        # GraphQL query for inbox messages
+        query = """
+        query getInboxMessages($me: String!, $first: Int, $after: String, $last: Int, $before: String) {
+          messages(
+            context: {segment: "messagesUserInbox", iri: $me}
+            first: $first
+            after: $after
+            last: $last
+            before: $before
+          ) {
+            totalCount
+            pageInfo {
+              hasNextPage
+              hasPreviousPage
+              startCursor
+              endCursor
+              __typename
+            }
+            edges {
+              node {
+                ...MessageInboxFragment
+                __typename
+              }
+              __typename
+            }
+            __typename
+          }
+        }
+
+        fragment MessageInboxFragment on Message {
+          id
+          _id
+          calculatedExtendedTitleShort
+          subject
+          previewText
+          priority
+          status
+          visibleTo
+          iHaveReadIt
+          authLevel
+          modified
+          modifiedby
+          lastContentChange
+          primaryAuthor {
+            id
+            _id
+            role
+            person {
+              id
+              _id
+              firstname
+              lastname
+              __typename
+            }
+            __typename
+          }
+          me {
+            id
+            seenWhen
+            readWhen
+            __typename
+          }
+          __typename
+        }
+        """
+        
+        variables = {
+            'me': person_id,
+            'first': 60,
+            'after': None
+        }
+        
+        # Make GraphQL request
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+            'Accept': '*/*',
+            'Origin': 'https://isy.ksr.ch',
+            'Referer': 'https://isy.ksr.ch/'
+        }
+        
+        response = requests.post(
+            ISY_API_URL,
+            json={'query': query, 'variables': variables, 'operationName': 'getInboxMessages'},
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code != 200:
+            print(f"GraphQL request failed with status {response.status_code}")
+            return jsonify({
+                'error': 'GraphQL request failed',
+                'message': f'Status code: {response.status_code}'
+            }), 500
+        
+        data = response.json()
+        print(f"Dashboard Messages GraphQL Response: {data}")
+        
+        # Parse messages from response
+        messages = []
+        if 'data' in data and 'messages' in data['data']:
+            edges = data['data']['messages'].get('edges', [])
+            total_count = data['data']['messages'].get('totalCount', 0)
+            print(f"Total messages in inbox: {total_count}")
+            
+            for edge in edges:
+                node = edge.get('node', {})
+                me = node.get('me', {})
+                primary_author = node.get('primaryAuthor', {})
+                author_person = primary_author.get('person', {}) if primary_author else {}
+                
+                # Get author name
+                author_name = 'Unbekannt'
+                if author_person:
+                    firstname = author_person.get('firstname', '')
+                    lastname = author_person.get('lastname', '')
+                    author_name = f"{firstname} {lastname}".strip() or 'Unbekannt'
+                
+                # Map priority string to number (LOW=0, NORMAL=1, HIGH=2, URGENT/CRITICAL=3)
+                priority_str = node.get('priority', 'NORMAL')
+                priority_map = {
+                    'LOW': 0,
+                    'NORMAL': 1,
+                    'HIGH': 2,
+                    'URGENT': 3,
+                    'CRITICAL': 3
+                }
+                priority_num = priority_map.get(priority_str, 1)  # Default to NORMAL
+                
+                messages.append({
+                    'id': node.get('id'),
+                    '_id': node.get('_id'),
+                    'title': node.get('calculatedExtendedTitleShort') or node.get('subject') or 'Keine Titel',
+                    'subject': node.get('subject'),
+                    'previewText': node.get('previewText'),
+                    'priority': priority_num,
+                    'priorityStr': priority_str,
+                    'status': node.get('status'),
+                    'visibleTo': node.get('visibleTo'),
+                    'iHaveReadIt': node.get('iHaveReadIt', False),
+                    'authLevel': node.get('authLevel'),
+                    'modified': node.get('modified'),
+                    'lastContentChange': node.get('lastContentChange'),
+                    'author': author_name,
+                    'seenWhen': me.get('seenWhen'),
+                    'readWhen': me.get('readWhen')
+                })
+        
+        print(f"Found {len(messages)} dashboard messages")
+        return jsonify({'messages': messages, 'totalCount': total_count if 'total_count' in locals() else len(messages)})
+        
+    except Exception as e:
+        print(f"Error in isy_dashboard_messages endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'Internal server error',
+            'message': str(e)
+        }), 500
 
 @app.route('/api/timetable')
 def get_timetable():
@@ -486,6 +1153,75 @@ def get_weather():
             'message': 'Unable to connect to weather service. Please check your API key and internet connection.'
         }), 500
 
+@app.route('/api/weekly')
+def get_weekly():
+    """API endpoint to get weekly timetable data"""
+    mode = request.args.get('mode', 'auto')
+    
+    events = []
+    csv_path = os.path.join(app.config['UPLOAD_FOLDER'], 'timetable.csv')
+    
+    # Check cache first for performance optimization
+    current_time = time_module.time()
+    with _timetable_cache['lock']:
+        cache_age = current_time - _timetable_cache['timestamp']
+        
+        if _timetable_cache['events'] is not None and cache_age < CACHE_DURATION:
+            # Use cached data
+            events = _timetable_cache['events']
+        else:
+            # Cache expired or empty, fetch new data
+            if mode == 'auto':
+                # Try to fetch from URL and convert to CSV
+                csv_file = fetch_and_convert_ics_to_csv(app.config['ICS_URL'])
+                
+                if csv_file and os.path.exists(csv_file):
+                    events = parse_csv_timetable(csv_file)
+                elif os.path.exists(csv_path):
+                    # Auto fetch failed, fallback to existing local CSV
+                    events = parse_csv_timetable(csv_path)
+            else:
+                # Manual mode - use uploaded CSV file only
+                if os.path.exists(csv_path):
+                    events = parse_csv_timetable(csv_path)
+            
+            # Update cache
+            _timetable_cache['events'] = events
+            _timetable_cache['timestamp'] = current_time
+    
+    if not events:
+        return jsonify({
+            'weekly_schedule': [],
+            'message': 'Keine Stundenplan-Daten verfügbar.'
+        })
+    
+    weekly_schedule = get_weekly_lessons(events)
+    
+    # Format data for JSON response
+    weekly_data = []
+    for day in weekly_schedule:
+        day_lessons = []
+        for lesson in day['lessons']:
+            day_lessons.append({
+                'summary': lesson['summary'],
+                'start': lesson['start'].isoformat(),
+                'end': lesson['end'].isoformat() if lesson['end'] else None,
+                'description': lesson['description'] if lesson['description'] and lesson['description'] != 'None' else '',
+                'location': lesson['location'],
+                'is_exam': lesson['is_exam'],
+                'is_cancelled': lesson['is_cancelled'],
+                'special_note': lesson['special_note']
+            })
+        
+        weekly_data.append({
+            'date': day['date'],
+            'lessons': day_lessons
+        })
+    
+    return jsonify({
+        'weekly_schedule': weekly_data
+    })
+
 @app.route('/upload', methods=['POST'])
 def upload_file():
     """Upload ICS file and convert to CSV"""
@@ -556,6 +1292,102 @@ def upload_file():
             return jsonify({'message': 'CSV file uploaded successfully'})
     
     return jsonify({'error': 'Invalid file type. Please upload an ICS or CSV file.'}), 400
+
+@app.route('/api/ai/chat', methods=['POST'])
+def ai_chat():
+    """AI chat endpoint using Google Gemini"""
+    if not GOOGLE_AI_API_KEY:
+        return jsonify({
+            'error': 'Google AI API key not configured',
+            'response': 'Der KI-Assistent ist nicht konfiguriert. Bitte setze GOOGLE_AI_API_KEY in der Konfiguration.'
+        }), 500
+    
+    try:
+        data = request.get_json()
+        user_message = data.get('message', '')
+        history = data.get('history', [])
+        
+        if not user_message:
+            return jsonify({'error': 'No message provided'}), 400
+        
+        # Get current timetable data for context
+        csv_path = os.path.join(app.config['UPLOAD_FOLDER'], 'timetable.csv')
+        events = []
+        
+        with _timetable_cache['lock']:
+            if _timetable_cache['events'] is not None:
+                events = _timetable_cache['events']
+            elif os.path.exists(csv_path):
+                events = parse_csv_timetable(csv_path)
+        
+        # Prepare context about the timetable
+        context = "Du bist ein hilfreicher Assistent für einen Schüler. Du hast Zugriff auf seinen Stundenplan.\n\n"
+        
+        if events:
+            next_lesson = get_next_lesson(events)
+            current_lesson = get_current_lesson(events)
+            todays_lessons = get_todays_lessons(events)
+            upcoming_exams = get_upcoming_exams(events)
+            
+            context += "AKTUELLE INFORMATIONEN:\n"
+            
+            if current_lesson:
+                context += f"Aktuelle Lektion: {current_lesson['summary']}"
+                if current_lesson['location']:
+                    context += f" im Raum {current_lesson['location']}"
+                context += f" (bis {current_lesson['end'].strftime('%H:%M')})\n"
+            
+            if next_lesson:
+                context += f"Nächste Lektion: {next_lesson['summary']}"
+                if next_lesson['location']:
+                    context += f" im Raum {next_lesson['location']}"
+                context += f" um {next_lesson['start'].strftime('%H:%M')}\n"
+            
+            if todays_lessons:
+                context += f"\nHeutige Lektionen ({len(todays_lessons)}):\n"
+                for lesson in todays_lessons[:5]:  # Limit to 5
+                    context += f"- {lesson['start'].strftime('%H:%M')}: {lesson['summary']}"
+                    if lesson['is_exam']:
+                        context += " (PRÜFUNG)"
+                    context += "\n"
+            
+            if upcoming_exams:
+                context += f"\nKommende Prüfungen:\n"
+                for exam in upcoming_exams:
+                    context += f"- {exam['start'].strftime('%d.%m.%Y %H:%M')}: {exam['summary']}\n"
+        
+        context += "\nBeantworte die Frage des Schülers freundlich und hilfreich auf Deutsch. Bei Fragen zum Stundenplan verwende die oben genannten Informationen."
+        
+        # Use Gemini Flash Lite model (free tier)
+        model = genai.GenerativeModel('gemini-2.5-flash-lite')
+        
+        # Build conversation history for the model
+        chat_history = []
+        for msg in history[-10:]:  # Keep last 10 messages
+            chat_history.append({
+                'role': 'user' if msg['role'] == 'user' else 'model',
+                'parts': [msg['content']]
+            })
+        
+        # Start chat with history
+        chat = model.start_chat(history=chat_history)
+        
+        # Send message with context
+        full_message = f"{context}\n\nFrage: {user_message}"
+        response = chat.send_message(full_message)
+        
+        return jsonify({
+            'response': response.text
+        })
+        
+    except Exception as e:
+        print(f"Error in AI chat: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'AI service error',
+            'response': f'Entschuldigung, es gab einen Fehler: {str(e)}'
+        }), 500
 
 if __name__ == '__main__':
     # Use environment variable to control debug mode

@@ -21,6 +21,15 @@ ICS_URL = 'https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/YOUR_TIMETABLE_ID_HE
 # IMPORTANT: This is YOUR API key! Keep it private.
 OPENWEATHER_API_KEY = 'YOUR_OPENWEATHER_API_KEY_HERE'
 
+# Google AI API Key
+# -----------------
+# Get your free API key from: https://ai.google.dev/
+# Sign up with your Google account and create an API key
+# Replace 'YOUR_GOOGLE_AI_API_KEY_HERE' with your actual API key
+#
+# IMPORTANT: This is YOUR API key! Keep it private.
+GOOGLE_AI_API_KEY = 'YOUR_GOOGLE_AI_API_KEY_HERE'
+
 # City for Weather
 # ----------------
 # Default city for weather information
@@ -30,3 +39,12 @@ WEATHER_CITY = 'Romanshorn'
 # -------------------
 # Set to 'production' when deploying, 'development' for local testing
 FLASK_ENV = 'development'
+
+# Flask Secret Key
+# ----------------
+# Required for session management and ISY authentication
+# Generate a random secret key for production:
+# python -c "import secrets; print(secrets.token_hex(32))"
+#
+# IMPORTANT: Change this in production! Keep it secret!
+FLASK_SECRET_KEY = 'dev-secret-key-change-in-production-use-python-secrets-token-hex'

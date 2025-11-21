@@ -619,6 +619,283 @@ function formatDateTime(startISO, endISO) {
     }
 }
 
+// Weekly View Functions
+let weeklyViewOpen = false;
+
+async function toggleWeeklyView() {
+    const modal = document.getElementById('weeklyModal');
+    
+    if (!weeklyViewOpen) {
+        // Open modal and load data
+        modal.style.display = 'block';
+        weeklyViewOpen = true;
+        document.body.style.overflow = 'hidden'; // Prevent scrolling
+        
+        // Update button text
+        const btn = document.getElementById('showMoreBtn');
+        const span = btn.querySelector('span');
+        span.textContent = translations.show_less || 'Weniger anzeigen';
+        
+        await loadWeeklySchedule();
+    } else {
+        closeWeeklyView();
+    }
+}
+
+function closeWeeklyView() {
+    const modal = document.getElementById('weeklyModal');
+    modal.style.display = 'none';
+    weeklyViewOpen = false;
+    document.body.style.overflow = ''; // Restore scrolling
+    
+    // Update button text
+    const btn = document.getElementById('showMoreBtn');
+    const span = btn.querySelector('span');
+    span.textContent = translations.show_more || 'Mehr anzeigen';
+}
+
+async function loadWeeklySchedule() {
+    const weeklyContent = document.getElementById('weeklyContent');
+    weeklyContent.innerHTML = '<p class="loading">Lade Wochenübersicht...</p>';
+    
+    try {
+        const response = await fetch('/api/weekly?mode=auto');
+        const data = await response.json();
+        
+        if (data.message) {
+            weeklyContent.innerHTML = `<p class="no-data">${data.message}</p>`;
+            return;
+        }
+        
+        if (!data.weekly_schedule || data.weekly_schedule.length === 0) {
+            weeklyContent.innerHTML = '<p class="no-data">Keine Lektionen für diese Woche gefunden.</p>';
+            return;
+        }
+        
+        // Build HTML for weekly schedule
+        let html = '<div class="weekly-days">';
+        
+        data.weekly_schedule.forEach(day => {
+            // Format date more compactly for column view
+            // Extract weekday and date from "Monday, 18. November 2025" format
+            const dateParts = day.date.split(', ');
+            const weekday = dateParts[0];
+            const dateNum = dateParts[1] ? dateParts[1].split('.')[0] : '';
+            const compactDate = dateNum ? `${weekday}<br>${dateNum}.` : weekday;
+            
+            html += `
+                <div class="weekly-day">
+                    <h3 class="weekly-day-header">${compactDate}</h3>
+                    <div class="weekly-day-lessons">
+            `;
+            
+            if (day.lessons.length === 0) {
+                html += '<p class="no-lessons">Keine Lektionen</p>';
+            } else {
+                day.lessons.forEach(lesson => {
+                    const startTime = extractTimeFromISO(lesson.start);
+                    const endTime = lesson.end ? extractTimeFromISO(lesson.end) : '';
+                    const timeString = endTime ? `${startTime} - ${endTime}` : startTime;
+                    
+                    const locationHtml = lesson.location ? 
+                        `<span class="weekly-location">${lesson.location}</span>` : '';
+                    
+                    const examBadge = lesson.is_exam ? 
+                        `<span class="weekly-exam-badge">Prüfung</span>` : '';
+                    
+                    const specialBadge = lesson.special_note ? 
+                        `<span class="weekly-special-badge">${lesson.special_note}</span>` : '';
+                    
+                    const cancelledClass = lesson.is_cancelled ? 'weekly-lesson-cancelled' : '';
+                    
+                    html += `
+                        <div class="weekly-lesson-item ${cancelledClass}">
+                            <div class="weekly-lesson-time">${timeString}</div>
+                            <div class="weekly-lesson-info">
+                                <div class="weekly-lesson-title">${lesson.summary}</div>
+                                <div class="weekly-lesson-meta">
+                                    ${locationHtml}
+                                    ${examBadge}
+                                    ${specialBadge}
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+            
+            html += `
+                    </div>
+                </div>
+            `;
+        });
+        
+        html += '</div>';
+        weeklyContent.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error loading weekly schedule:', error);
+        weeklyContent.innerHTML = `<p class="error-message">Fehler beim Laden der Wochenübersicht: ${error.message}</p>`;
+    }
+}
+
+// AI Chat Functions
+let aiChatOpen = false;
+let aiConversationHistory = [];
+
+function openAIChat() {
+    const modal = document.getElementById('aiModal');
+    modal.style.display = 'block';
+    aiChatOpen = true;
+    document.body.style.overflow = 'hidden';
+    
+    // Initialize with welcome message if empty
+    const messagesDiv = document.getElementById('aiMessages');
+    if (messagesDiv.children.length === 0) {
+        addAIMessage('assistant', translations.ai_welcome || 'Hallo! Wie kann ich dir helfen? Ich kann Fragen zu deinem Stundenplan, Prüfungen und mehr beantworten.');
+    }
+    
+    // Focus input
+    document.getElementById('aiInput').focus();
+}
+
+function closeAIChat() {
+    const modal = document.getElementById('aiModal');
+    modal.style.display = 'none';
+    aiChatOpen = false;
+    document.body.style.overflow = '';
+}
+
+function addAIMessage(role, content) {
+    const messagesDiv = document.getElementById('aiMessages');
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `ai-message ${role}-message`;
+    
+    const avatar = document.createElement('div');
+    avatar.className = 'ai-avatar';
+    avatar.innerHTML = role === 'user' ? 
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>' :
+        '<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>';
+    
+    const contentDiv = document.createElement('div');
+    contentDiv.className = 'ai-message-content';
+    contentDiv.textContent = content;
+    
+    messageDiv.appendChild(avatar);
+    messageDiv.appendChild(contentDiv);
+    messagesDiv.appendChild(messageDiv);
+    
+    // Scroll to bottom
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+}
+
+async function sendAIMessage() {
+    const input = document.getElementById('aiInput');
+    const message = input.value.trim();
+    
+    if (!message) return;
+    
+    // Add user message
+    addAIMessage('user', message);
+    input.value = '';
+    
+    // Show typing indicator
+    const messagesDiv = document.getElementById('aiMessages');
+    const typingDiv = document.createElement('div');
+    typingDiv.className = 'ai-message assistant-message typing-indicator';
+    typingDiv.innerHTML = `
+        <div class="ai-avatar">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+            </svg>
+        </div>
+        <div class="ai-message-content">
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+            <span class="typing-dot"></span>
+        </div>
+    `;
+    messagesDiv.appendChild(typingDiv);
+    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+    
+    try {
+        // Send message to backend
+        const response = await fetch('/api/ai/chat', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                message: message,
+                history: aiConversationHistory
+            })
+        });
+        
+        const data = await response.json();
+        
+        // Remove typing indicator
+        typingDiv.remove();
+        
+        if (data.error) {
+            // Show detailed error message
+            let errorMsg = data.error;
+            if (data.response) {
+                errorMsg = data.response; // Use the response field which has the German message
+            }
+            addAIMessage('assistant', errorMsg);
+        } else if (data.response) {
+            addAIMessage('assistant', data.response);
+            
+            // Update conversation history
+            aiConversationHistory.push({
+                role: 'user',
+                content: message
+            });
+            aiConversationHistory.push({
+                role: 'assistant',
+                content: data.response
+            });
+            
+            // Keep only last 10 messages to avoid token limits
+            if (aiConversationHistory.length > 20) {
+                aiConversationHistory = aiConversationHistory.slice(-20);
+            }
+        } else {
+            addAIMessage('assistant', 'Entschuldigung, keine Antwort erhalten.');
+        }
+    } catch (error) {
+        typingDiv.remove();
+        console.error('Error sending AI message:', error);
+        addAIMessage('assistant', 'Entschuldigung, es gab einen Verbindungsfehler. Bitte versuche es später erneut.');
+    }
+}
+
+// Allow Enter to send message (Shift+Enter for new line)
+document.addEventListener('DOMContentLoaded', function() {
+    const aiInput = document.getElementById('aiInput');
+    if (aiInput) {
+        aiInput.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendAIMessage();
+            }
+        });
+    }
+});
+
+// Close modals when clicking outside
+window.addEventListener('click', function(event) {
+    const weeklyModal = document.getElementById('weeklyModal');
+    const aiModal = document.getElementById('aiModal');
+    
+    if (event.target === weeklyModal) {
+        closeWeeklyView();
+    }
+    if (event.target === aiModal) {
+        closeAIChat();
+    }
+});
+
 // Initialize data on page load
 document.addEventListener('DOMContentLoaded', function() {
     // Load saved language preference
@@ -640,4 +917,474 @@ document.addEventListener('DOMContentLoaded', function() {
     // Refresh full data periodically (every 5 minutes)
     setInterval(() => loadTimetable(false), 5 * 60 * 1000);
     setInterval(loadWeather, 10 * 60 * 1000);  // Every 10 minutes
+});
+
+// ISY Authentication Functions
+// =============================
+
+let isyAuthenticated = false;
+let isyUsername = null;
+
+async function checkISYStatus() {
+    try {
+        const response = await fetch('/api/isy/status');
+        const data = await response.json();
+        
+        isyAuthenticated = data.authenticated;
+        isyUsername = data.username;
+        
+        updateISYButton();
+        
+        if (isyAuthenticated) {
+            // Load messages if authenticated
+            loadISYMessages();
+            loadISYDashboardMessages();
+        } else {
+            // Clear dashboard messages if not authenticated
+            const dashboardDiv = document.getElementById('isyDashboardMessages');
+            if (dashboardDiv) {
+                dashboardDiv.innerHTML = '<p class="info-message" data-i18n="isy_login_required">Bitte anmelden für Mitteilungen</p>';
+            }
+        }
+    } catch (error) {
+        console.error('Error checking ISY status:', error);
+    }
+}
+
+function updateISYButton() {
+    const btn = document.getElementById('isyBtn');
+    if (isyAuthenticated) {
+        btn.classList.add('active');
+        btn.title = `ISY: ${isyUsername}`;
+    } else {
+        btn.classList.remove('active');
+        btn.title = 'ISY Login';
+    }
+}
+
+function toggleISYLogin() {
+    const modal = document.getElementById('isyModal');
+    if (modal.style.display === 'block') {
+        closeISYLogin();
+    } else {
+        openISYLogin();
+    }
+}
+
+function openISYLogin() {
+    const modal = document.getElementById('isyModal');
+    modal.style.display = 'block';
+    document.body.style.overflow = 'hidden';
+    
+    updateISYLoginUI();
+}
+
+function closeISYLogin() {
+    const modal = document.getElementById('isyModal');
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+}
+
+function updateISYLoginUI() {
+    const statusDiv = document.getElementById('isyStatus');
+    const loginBtn = document.querySelector('.isy-login-btn');
+    const logoutBtn = document.querySelector('.isy-logout-btn');
+    const usernameInput = document.getElementById('isyUsername');
+    const passwordInput = document.getElementById('isyPassword');
+    const messagesDiv = document.getElementById('isyMessages');
+    
+    if (isyAuthenticated) {
+        statusDiv.innerHTML = `<p>✅ Angemeldet als: <strong>${isyUsername}</strong></p>`;
+        loginBtn.style.display = 'none';
+        logoutBtn.style.display = 'block';
+        usernameInput.disabled = true;
+        passwordInput.disabled = true;
+        messagesDiv.style.display = 'block';
+    } else {
+        statusDiv.innerHTML = '<p>Nicht angemeldet</p>';
+        loginBtn.style.display = 'block';
+        logoutBtn.style.display = 'none';
+        usernameInput.disabled = false;
+        passwordInput.disabled = false;
+        messagesDiv.style.display = 'none';
+    }
+}
+
+async function submitISYLogin() {
+    const username = document.getElementById('isyUsername').value.trim();
+    const password = document.getElementById('isyPassword').value;
+    const staySignedIn = document.getElementById('isyStaySignedIn').checked;
+    const errorDiv = document.getElementById('isyError');
+    
+    if (!username || !password) {
+        errorDiv.textContent = 'Bitte Benutzername und Passwort eingeben';
+        errorDiv.style.display = 'block';
+        return;
+    }
+    
+    errorDiv.style.display = 'none';
+    
+    // Disable button during login
+    const loginBtn = document.querySelector('.isy-login-btn');
+    loginBtn.disabled = true;
+    loginBtn.textContent = 'Anmelden...';
+    
+    try {
+        const response = await fetch('/api/isy/login', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                username: username,
+                password: password,
+                staySignedIn: staySignedIn
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (response.ok) {
+            isyAuthenticated = true;
+            isyUsername = data.username;
+            
+            // Clear password field
+            document.getElementById('isyPassword').value = '';
+            
+            // Update UI
+            updateISYButton();
+            updateISYLoginUI();
+            
+            // Load messages
+            loadISYMessages();
+            
+            showToast('ISY Login', 'Erfolgreich angemeldet!');
+        } else {
+            errorDiv.textContent = data.error || 'Anmeldung fehlgeschlagen';
+            errorDiv.style.display = 'block';
+        }
+    } catch (error) {
+        console.error('ISY login error:', error);
+        errorDiv.textContent = 'Verbindungsfehler. Bitte später versuchen.';
+        errorDiv.style.display = 'block';
+    } finally {
+        loginBtn.disabled = false;
+        loginBtn.textContent = 'Anmelden';
+    }
+}
+
+async function submitISYLogout() {
+    try {
+        const response = await fetch('/api/isy/logout', {
+            method: 'POST'
+        });
+        
+        if (response.ok) {
+            isyAuthenticated = false;
+            isyUsername = null;
+            
+            // Clear form
+            document.getElementById('isyUsername').value = '';
+            document.getElementById('isyPassword').value = '';
+            document.getElementById('isyStaySignedIn').checked = false;
+            
+            // Update UI
+            updateISYButton();
+            updateISYLoginUI();
+            
+            showToast('ISY Logout', 'Erfolgreich abgemeldet');
+        }
+    } catch (error) {
+        console.error('ISY logout error:', error);
+    }
+}
+
+async function loadISYMessages() {
+    if (!isyAuthenticated) return;
+    
+    const messagesList = document.getElementById('isyMessagesList');
+    messagesList.innerHTML = '<p class="loading">Lade Mitteilungen...</p>';
+    
+    try {
+        const response = await fetch('/api/isy/messages');
+        const data = await response.json();
+        
+        console.log('ISY Messages Response:', data);
+        
+        if (response.ok) {
+            if (data.messages && data.messages.length > 0) {
+                messagesList.innerHTML = data.messages.map(msg => {
+                    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msg.priority] || 'Normal';
+                    const priorityClass = ['low', 'normal', 'high', 'urgent'][msg.priority] || 'normal';
+                    
+                    let dateInfo = '';
+                    if (msg.dtDue) {
+                        dateInfo = `<div class="isy-message-date">📅 Fällig: ${new Date(msg.dtDue).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>`;
+                    } else if (msg.visibleTo) {
+                        dateInfo = `<div class="isy-message-date">📅 Bis: ${new Date(msg.visibleTo).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>`;
+                    }
+                    
+                    const statusBadges = [];
+                    if (msg.completed) {
+                        statusBadges.push('<span class="isy-badge completed">✅ Erledigt</span>');
+                    }
+                    if (msg.readWhen) {
+                        statusBadges.push('<span class="isy-badge read">👁️ Gelesen</span>');
+                    }
+                    if (msg.archivedWhen) {
+                        statusBadges.push('<span class="isy-badge archived">📦 Archiviert</span>');
+                    }
+                    
+                    return `
+                        <div class="isy-message-item priority-${priorityClass}" data-message-id="${msg.id}">
+                            <div class="isy-message-header">
+                                <div class="isy-message-title">${msg.title || 'Keine Titel'}</div>
+                                <div class="isy-message-priority priority-${priorityClass}">
+                                    <span class="priority-dot"></span>${priorityText}
+                                </div>
+                            </div>
+                            ${dateInfo}
+                            ${msg.body ? `<div class="isy-message-body">${msg.body.substring(0, 200)}${msg.body.length > 200 ? '...' : ''}</div>` : ''}
+                            ${statusBadges.length > 0 ? `<div class="isy-message-badges">${statusBadges.join('')}</div>` : ''}
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                messagesList.innerHTML = '<p class="no-data">Keine Mitteilungen vorhanden</p>';
+            }
+        } else {
+            // Check if token expired
+            if (data.login_required) {
+                // Token expired - clear auth state and prompt re-login
+                isyAuthenticated = false;
+                localStorage.removeItem('isyAuthenticated');
+                messagesList.innerHTML = '<p class="error-message">Sitzung abgelaufen - bitte erneut anmelden</p>';
+                
+                // Update UI to show login button
+                const isyButton = document.getElementById('isyLoginBtn');
+                if (isyButton) {
+                    isyButton.textContent = translations[currentLanguage].isyLogin;
+                    isyButton.classList.remove('authenticated');
+                }
+            } else {
+                // Show error details for debugging
+                const errorMsg = data.error || 'Fehler beim Laden der Mitteilungen';
+                const errorDetail = data.message ? `<br><small>${data.message}</small>` : '';
+                messagesList.innerHTML = `<p class="error-message">${errorMsg}${errorDetail}</p>`;
+            }
+            console.error('ISY messages error:', data);
+        }
+    } catch (error) {
+        console.error('Error loading ISY messages:', error);
+        messagesList.innerHTML = `<p class="error-message">Verbindungsfehler: ${error.message}</p>`;
+    }
+}
+
+// Load dashboard messages (full archive) for the 5th column
+async function loadISYDashboardMessages() {
+    if (!isyAuthenticated) return;
+    
+    const dashboardDiv = document.getElementById('isyDashboardMessages');
+    if (!dashboardDiv) return;
+    
+    dashboardDiv.innerHTML = '<p class="loading">Lade Mitteilungen...</p>';
+    
+    try {
+        const response = await fetch('/api/isy/dashboard-messages');
+        const data = await response.json();
+        
+        console.log('ISY Dashboard Messages Response:', data);
+        
+        if (response.ok) {
+            if (data.messages && data.messages.length > 0) {
+                // Show only first 10 messages for dashboard
+                const displayMessages = data.messages.slice(0, 10);
+                
+                dashboardDiv.innerHTML = displayMessages.map(msg => {
+                    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msg.priority] || 'Normal';
+                    const priorityClass = ['low', 'normal', 'high', 'urgent'][msg.priority] || 'normal';
+                    
+                    let dateInfo = '';
+                    if (msg.visibleTo) {
+                        const date = new Date(msg.visibleTo);
+                        dateInfo = `<div class="dashboard-msg-date">📅 ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</div>`;
+                    }
+                    
+                    const readIndicator = msg.iHaveReadIt ? '' : '<span class="unread-dot">●</span>';
+                    
+                    return `
+                        <div class="dashboard-message-item priority-${priorityClass}" data-message-id="${msg.id}" data-message-full='${JSON.stringify(msg).replace(/'/g, "&#39;")}' style="cursor: pointer;">
+                            <div class="dashboard-msg-header">
+                                <div class="dashboard-msg-title">
+                                    ${readIndicator}
+                                    ${msg.title}
+                                </div>
+                                <span class="dashboard-priority-dot ${priorityClass}"></span>
+                            </div>
+                            ${msg.author ? `<div class="dashboard-msg-author">👤 ${msg.author}</div>` : ''}
+                            ${msg.previewText ? `<div class="dashboard-msg-preview">${msg.previewText.substring(0, 100)}${msg.previewText.length > 100 ? '...' : ''}</div>` : ''}
+                            ${dateInfo}
+                        </div>
+                    `;
+                }).join('');
+                
+                // Add click event listeners
+                document.querySelectorAll('.dashboard-message-item').forEach(item => {
+                    item.addEventListener('click', function() {
+                        const msgData = JSON.parse(this.getAttribute('data-message-full').replace(/&#39;/g, "'"));
+                        showMessageModal(msgData);
+                    });
+                });
+            } else {
+                dashboardDiv.innerHTML = '<p class="no-data">Keine Mitteilungen vorhanden</p>';
+            }
+        } else {
+            // Check if token expired
+            if (data.login_required) {
+                // Token expired - clear auth state
+                isyAuthenticated = false;
+                localStorage.removeItem('isyAuthenticated');
+                dashboardDiv.innerHTML = '<p class="error-message">Sitzung abgelaufen - bitte erneut anmelden</p>';
+                
+                // Update UI to show login button
+                const isyButton = document.getElementById('isyLoginBtn');
+                if (isyButton) {
+                    isyButton.textContent = translations[currentLanguage].isyLogin;
+                    isyButton.classList.remove('authenticated');
+                }
+            } else {
+                const errorMsg = data.error || 'Fehler beim Laden';
+                dashboardDiv.innerHTML = `<p class="error-message">${errorMsg}</p>`;
+            }
+            console.error('ISY dashboard messages error:', data);
+        }
+    } catch (error) {
+        console.error('Error loading ISY dashboard messages:', error);
+        dashboardDiv.innerHTML = `<p class="error-message">Verbindungsfehler: ${error.message}</p>`;
+    }
+}
+
+// Show message modal with full details
+async function showMessageModal(msg) {
+    const modal = document.getElementById('messageModal');
+    if (!modal) return;
+    
+    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msg.priority] || 'Normal';
+    const priorityClass = ['low', 'normal', 'high', 'urgent'][msg.priority] || 'normal';
+    
+    // Show loading state
+    modal.querySelector('.modal-content').innerHTML = `
+        <div class="message-modal-header priority-${priorityClass}">
+            <h2>${msg.title}</h2>
+            <button class="close-btn" onclick="closeMessageModal()">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+            </button>
+        </div>
+        <div class="message-modal-body">
+            <div class="loading">Lade Nachricht...</div>
+        </div>
+    `;
+    modal.style.display = 'flex';
+    
+    try {
+        // Fetch full message details from API
+        const response = await fetch(`/api/isy/message/${msg.id.split('/')[2]}`, {
+            method: 'GET',
+            headers: {
+                'Content-Type': 'application/json'
+            }
+        });
+        
+        const data = await response.json();
+        
+        if (data.success && data.message) {
+            const fullMsg = data.message;
+            
+            let dateInfo = '';
+            if (fullMsg.visibleTo) {
+                const date = new Date(fullMsg.visibleTo);
+                dateInfo = `Sichtbar bis: ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+            }
+            
+            const modalContent = `
+                <div class="message-modal-header priority-${priorityClass}">
+                    <h2>${fullMsg.calculatedExtendedTitle || fullMsg.title || msg.title}</h2>
+                    <button class="close-btn" onclick="closeMessageModal()">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+                <div class="message-modal-body">
+                    <div class="message-meta">
+                        ${fullMsg.primaryAuthor && fullMsg.primaryAuthor.person ? `<div class="message-author">👤 <strong>${fullMsg.primaryAuthor.person.firstname} ${fullMsg.primaryAuthor.person.lastname}</strong></div>` : ''}
+                        ${dateInfo ? `<div class="message-date">📅 ${dateInfo}</div>` : ''}
+                        <div class="message-priority">Priorität: <span class="priority-badge ${priorityClass}">${priorityText}</span></div>
+                    </div>
+                    <div class="message-content">
+                        ${fullMsg.body || fullMsg.subject || msg.previewText || 'Kein Inhalt verfügbar'}
+                    </div>
+                </div>
+            `;
+            
+            modal.querySelector('.modal-content').innerHTML = modalContent;
+        } else {
+            throw new Error(data.error || 'Fehler beim Laden der Nachricht');
+        }
+    } catch (error) {
+        console.error('Error loading full message:', error);
+        // Fallback to preview data
+        let dateInfo = '';
+        if (msg.visibleTo) {
+            const date = new Date(msg.visibleTo);
+            dateInfo = `Sichtbar bis: ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+        }
+        
+        const modalContent = `
+            <div class="message-modal-header priority-${priorityClass}">
+                <h2>${msg.title}</h2>
+                <button class="close-btn" onclick="closeMessageModal()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="message-modal-body">
+                <div class="message-meta">
+                    ${msg.author ? `<div class="message-author">👤 <strong>${msg.author}</strong></div>` : ''}
+                    ${dateInfo ? `<div class="message-date">📅 ${dateInfo}</div>` : ''}
+                    <div class="message-priority">Priorität: <span class="priority-badge ${priorityClass}">${priorityText}</span></div>
+                </div>
+                <div class="message-content">
+                    ${msg.previewText || 'Kein Inhalt verfügbar'}
+                </div>
+            </div>
+        `;
+        
+        modal.querySelector('.modal-content').innerHTML = modalContent;
+    }
+}
+
+function closeMessageModal() {
+    const modal = document.getElementById('messageModal');
+    if (modal) {
+        modal.style.display = 'none';
+    }
+}
+
+// Check ISY status on page load
+document.addEventListener('DOMContentLoaded', function() {
+    checkISYStatus();
+    
+    // Allow Enter key in ISY login form
+    const isyPassword = document.getElementById('isyPassword');
+    if (isyPassword) {
+        isyPassword.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                submitISYLogin();
+            }
+        });
+    }
 });

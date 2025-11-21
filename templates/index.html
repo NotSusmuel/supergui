@@ -54,6 +54,11 @@
                         <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/>
                     </svg>
                 </button>
+                <button class="isy-btn" onclick="toggleISYLogin()" id="isyBtn" title="ISY Login">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                    </svg>
+                </button>
             </div>
             
             <div class="clock-container compact-clock">
@@ -64,7 +69,7 @@
 
         <!-- Compact Main Content -->
         <main class="main-content compact-main">
-            <!-- 4-Column Layout -->
+            <!-- 5-Column Layout -->
             <div class="compact-row">
                 <!-- Current Lesson & Next Lesson Combined -->
                 <section class="card compact-card">
@@ -83,6 +88,12 @@
                     <div id="todaysLessonsList" class="todays-list compact">
                         <p class="loading" data-i18n="loading">Lade...</p>
                     </div>
+                    <button class="show-more-btn" onclick="toggleWeeklyView()" id="showMoreBtn">
+                        <span data-i18n="show_more">Mehr anzeigen</span>
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M7.41 8.59L12 13.17l4.59-4.58L18 10l-6 6-6-6 1.41-1.41z"/>
+                        </svg>
+                    </button>
                 </section>
 
                 <!-- Exams - Compact -->
@@ -93,16 +104,116 @@
                     </div>
                 </section>
                 
-                <!-- Weather - Compact -->
+                <!-- ISY Messages - 4th Column -->
                 <section class="card compact-card">
-                    <h2 data-i18n="weather">Wetter</h2>
-                    <div id="weatherContent" class="weather-content compact">
-                        <p class="loading" data-i18n="loading_weather">Lade...</p>
+                    <h2 data-i18n="isy_messages_dashboard">ISY Mitteilungen</h2>
+                    <div id="isyDashboardMessages" class="isy-dashboard-messages compact">
+                        <p class="info-message" data-i18n="isy_login_required">Bitte anmelden für Mitteilungen</p>
                     </div>
                 </section>
             </div>
         </main>
     </div>
+
+    <!-- Weekly View Modal -->
+    <div id="weeklyModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 data-i18n="weekly_schedule">Wochenübersicht</h2>
+                <button class="close-btn" onclick="closeWeeklyView()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="weeklyContent" class="weekly-content">
+                <p class="loading" data-i18n="loading">Lade...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Chat Modal -->
+    <div id="aiModal" class="modal">
+        <div class="modal-content ai-modal">
+            <div class="modal-header">
+                <h2 data-i18n="ai_assistant">KI-Assistent</h2>
+                <button class="close-btn" onclick="closeAIChat()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="aiChatContent" class="ai-chat-content">
+                <div id="aiMessages" class="ai-messages"></div>
+                <div class="ai-input-area">
+                    <textarea id="aiInput" placeholder="Stelle eine Frage..." rows="2" data-i18n-placeholder="ai_input_placeholder"></textarea>
+                    <button class="ai-send-btn" onclick="sendAIMessage()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ISY Login Modal -->
+    <div id="isyModal" class="modal">
+        <div class="modal-content isy-modal">
+            <div class="modal-header">
+                <h2 data-i18n="isy_login">ISY Anmeldung</h2>
+                <button class="close-btn" onclick="closeISYLogin()">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="isy-login-content">
+                <div id="isyLoginForm" class="isy-form">
+                    <div class="isy-status" id="isyStatus">
+                        <p data-i18n="not_logged_in">Nicht angemeldet</p>
+                    </div>
+                    <div class="label-input">
+                        <label data-i18n="username">Benutzername</label>
+                        <input type="text" id="isyUsername" placeholder="Benutzername" autocomplete="username">
+                    </div>
+                    <div class="label-input">
+                        <label data-i18n="password">Passwort</label>
+                        <input type="password" id="isyPassword" placeholder="Passwort" autocomplete="current-password">
+                    </div>
+                    <div class="stay-signed-in">
+                        <label>
+                            <input type="checkbox" id="isyStaySignedIn">
+                            <span data-i18n="stay_signed_in">Angemeldet bleiben</span>
+                        </label>
+                    </div>
+                    <div class="isy-error" id="isyError" style="display: none;"></div>
+                    <div class="isy-buttons">
+                        <button class="isy-login-btn" onclick="submitISYLogin()" data-i18n="login_button">Anmelden</button>
+                        <button class="isy-logout-btn" onclick="submitISYLogout()" style="display: none;" data-i18n="logout">Abmelden</button>
+                    </div>
+                </div>
+                <div id="isyMessages" class="isy-messages" style="display: none;">
+                    <h3 data-i18n="isy_messages">Mitteilungen</h3>
+                    <div id="isyMessagesList"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Message Detail Modal -->
+    <div id="messageModal" class="modal">
+        <div class="modal-content message-modal">
+            <!-- Content will be populated by JavaScript -->
+        </div>
+    </div>
+
+    <!-- AI Chat Button (Floating) -->
+    <button class="ai-chat-btn" onclick="openAIChat()" title="KI-Assistent">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+        </svg>
+    </button>
 
     <!-- Notification Sound (hidden) -->
     <audio id="notificationSound" preload="auto">
