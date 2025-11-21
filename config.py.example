@@ -39,3 +39,12 @@ WEATHER_CITY = 'Romanshorn'
 # -------------------
 # Set to 'production' when deploying, 'development' for local testing
 FLASK_ENV = 'development'
+
+# Flask Secret Key
+# ----------------
+# Required for session management and ISY authentication
+# Generate a random secret key for production:
+# python -c "import secrets; print(secrets.token_hex(32))"
+#
+# IMPORTANT: Change this in production! Keep it secret!
+FLASK_SECRET_KEY = 'dev-secret-key-change-in-production-use-python-secrets-token-hex'
