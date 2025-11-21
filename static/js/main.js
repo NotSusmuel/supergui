@@ -938,6 +938,13 @@ async function checkISYStatus() {
         if (isyAuthenticated) {
             // Load messages if authenticated
             loadISYMessages();
+            loadISYDashboardMessages();
+        } else {
+            // Clear dashboard messages if not authenticated
+            const dashboardDiv = document.getElementById('isyDashboardMessages');
+            if (dashboardDiv) {
+                dashboardDiv.innerHTML = '<p class="info-message" data-i18n="isy_login_required">Bitte anmelden für Mitteilungen</p>';
+            }
         }
     } catch (error) {
         console.error('Error checking ISY status:', error);
@@ -1155,6 +1162,67 @@ async function loadISYMessages() {
     } catch (error) {
         console.error('Error loading ISY messages:', error);
         messagesList.innerHTML = `<p class="error-message">Verbindungsfehler: ${error.message}</p>`;
+    }
+}
+
+// Load dashboard messages (full archive) for the 5th column
+async function loadISYDashboardMessages() {
+    if (!isyAuthenticated) return;
+    
+    const dashboardDiv = document.getElementById('isyDashboardMessages');
+    if (!dashboardDiv) return;
+    
+    dashboardDiv.innerHTML = '<p class="loading">Lade Mitteilungen...</p>';
+    
+    try {
+        const response = await fetch('/api/isy/dashboard-messages');
+        const data = await response.json();
+        
+        console.log('ISY Dashboard Messages Response:', data);
+        
+        if (response.ok) {
+            if (data.messages && data.messages.length > 0) {
+                // Show only first 10 messages for dashboard
+                const displayMessages = data.messages.slice(0, 10);
+                
+                dashboardDiv.innerHTML = displayMessages.map(msg => {
+                    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msg.priority] || 'Normal';
+                    const priorityClass = ['low', 'normal', 'high', 'urgent'][msg.priority] || 'normal';
+                    
+                    let dateInfo = '';
+                    if (msg.visibleTo) {
+                        const date = new Date(msg.visibleTo);
+                        dateInfo = `<div class="dashboard-msg-date">📅 ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</div>`;
+                    }
+                    
+                    const readIndicator = msg.iHaveReadIt ? '' : '<span class="unread-dot">●</span>';
+                    
+                    return `
+                        <div class="dashboard-message-item priority-${priorityClass}" data-message-id="${msg.id}">
+                            <div class="dashboard-msg-header">
+                                <div class="dashboard-msg-title">
+                                    ${readIndicator}
+                                    ${msg.title}
+                                </div>
+                                <span class="dashboard-priority-dot ${priorityClass}"></span>
+                            </div>
+                            ${msg.author ? `<div class="dashboard-msg-author">👤 ${msg.author}</div>` : ''}
+                            ${msg.previewText ? `<div class="dashboard-msg-preview">${msg.previewText.substring(0, 100)}${msg.previewText.length > 100 ? '...' : ''}</div>` : ''}
+                            ${dateInfo}
+                        </div>
+                    `;
+                }).join('');
+            } else {
+                dashboardDiv.innerHTML = '<p class="no-data">Keine Mitteilungen vorhanden</p>';
+            }
+        } else {
+            const errorMsg = data.error || 'Fehler beim Laden';
+            dashboardDiv.innerHTML = `<p class="error-message">${errorMsg}</p>`;
+            console.error('ISY dashboard messages error:', data);
+        }
+    } catch (error) {
+        console.error('Error loading ISY dashboard messages:', error);
+        dashboardDiv.innerHTML = `<p class="error-message">Verbindungsfehler: ${error.message}</p>`;
     }
 }
 

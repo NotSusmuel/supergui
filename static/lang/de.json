@@ -51,5 +51,7 @@
   "isy_login": "ISY Anmeldung",
   "not_logged_in": "Nicht angemeldet",
   "stay_signed_in": "Angemeldet bleiben",
-  "isy_messages": "Mitteilungen"
+  "isy_messages": "Mitteilungen",
+  "isy_messages_dashboard": "ISY Mitteilungen",
+  "isy_login_required": "Bitte anmelden für Mitteilungen"
 }

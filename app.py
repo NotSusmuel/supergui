@@ -748,6 +748,173 @@ def isy_messages():
             'message': str(e)
         }), 500
 
+@app.route('/api/isy/dashboard-messages')
+@isy_login_required
+def isy_dashboard_messages():
+    """
+    Fetch inbox messages for dashboard display using GraphQL API
+    This uses the getInboxMessages query with the user's person ID
+    """
+    try:
+        token = session.get('isy_token')
+        
+        # Get person ID for the authenticated user
+        person_id = get_isy_person_id(token)
+        
+        if not person_id:
+            return jsonify({
+                'error': 'Could not get user person ID',
+                'message': 'Failed to fetch person information from ISY. Please try logging in again.'
+            }), 500
+        
+        # GraphQL query for inbox messages
+        query = """
+        query getInboxMessages($me: String!, $first: Int, $after: String, $last: Int, $before: String) {
+          messages(
+            context: {segment: "messagesUserInbox", iri: $me}
+            first: $first
+            after: $after
+            last: $last
+            before: $before
+          ) {
+            totalCount
+            pageInfo {
+              hasNextPage
+              hasPreviousPage
+              startCursor
+              endCursor
+              __typename
+            }
+            edges {
+              node {
+                ...MessageInboxFragment
+                __typename
+              }
+              __typename
+            }
+            __typename
+          }
+        }
+
+        fragment MessageInboxFragment on Message {
+          id
+          _id
+          calculatedExtendedTitleShort
+          subject
+          previewText
+          priority
+          status
+          visibleTo
+          iHaveReadIt
+          authLevel
+          modified
+          modifiedby
+          lastContentChange
+          primaryAuthor {
+            id
+            _id
+            role
+            person {
+              id
+              _id
+              firstname
+              lastname
+              __typename
+            }
+            __typename
+          }
+          me {
+            id
+            seenWhen
+            readWhen
+            __typename
+          }
+          __typename
+        }
+        """
+        
+        variables = {
+            'me': person_id,
+            'first': 60,
+            'after': None
+        }
+        
+        # Make GraphQL request
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+            'Accept': '*/*',
+            'Origin': 'https://isy.ksr.ch',
+            'Referer': 'https://isy.ksr.ch/'
+        }
+        
+        response = requests.post(
+            ISY_GRAPHQL_URL,
+            json={'query': query, 'variables': variables, 'operationName': 'getInboxMessages'},
+            headers=headers,
+            timeout=10
+        )
+        
+        if response.status_code != 200:
+            print(f"GraphQL request failed with status {response.status_code}")
+            return jsonify({
+                'error': 'GraphQL request failed',
+                'message': f'Status code: {response.status_code}'
+            }), 500
+        
+        data = response.json()
+        print(f"Dashboard Messages GraphQL Response: {data}")
+        
+        # Parse messages from response
+        messages = []
+        if 'data' in data and 'messages' in data['data']:
+            edges = data['data']['messages'].get('edges', [])
+            total_count = data['data']['messages'].get('totalCount', 0)
+            print(f"Total messages in inbox: {total_count}")
+            
+            for edge in edges:
+                node = edge.get('node', {})
+                me = node.get('me', {})
+                primary_author = node.get('primaryAuthor', {})
+                author_person = primary_author.get('person', {}) if primary_author else {}
+                
+                # Get author name
+                author_name = 'Unbekannt'
+                if author_person:
+                    firstname = author_person.get('firstname', '')
+                    lastname = author_person.get('lastname', '')
+                    author_name = f"{firstname} {lastname}".strip() or 'Unbekannt'
+                
+                messages.append({
+                    'id': node.get('id'),
+                    '_id': node.get('_id'),
+                    'title': node.get('calculatedExtendedTitleShort') or node.get('subject') or 'Keine Titel',
+                    'subject': node.get('subject'),
+                    'previewText': node.get('previewText'),
+                    'priority': node.get('priority', 1),
+                    'status': node.get('status'),
+                    'visibleTo': node.get('visibleTo'),
+                    'iHaveReadIt': node.get('iHaveReadIt', False),
+                    'authLevel': node.get('authLevel'),
+                    'modified': node.get('modified'),
+                    'lastContentChange': node.get('lastContentChange'),
+                    'author': author_name,
+                    'seenWhen': me.get('seenWhen'),
+                    'readWhen': me.get('readWhen')
+                })
+        
+        print(f"Found {len(messages)} dashboard messages")
+        return jsonify({'messages': messages, 'totalCount': total_count if 'total_count' in locals() else len(messages)})
+        
+    except Exception as e:
+        print(f"Error in isy_dashboard_messages endpoint: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'error': 'Internal server error',
+            'message': str(e)
+        }), 500
+
 @app.route('/api/timetable')
 def get_timetable():
     """API endpoint to get timetable data with caching for performance"""
