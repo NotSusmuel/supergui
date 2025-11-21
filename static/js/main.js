@@ -1157,15 +1157,6 @@ async function loadISYMessages() {
         messagesList.innerHTML = `<p class="error-message">Verbindungsfehler: ${error.message}</p>`;
     }
 }
-            const errorDetail = data.message ? `<br><small>${data.message}</small>` : '';
-            messagesList.innerHTML = `<p class="error-message">${errorMsg}${errorDetail}</p>`;
-            console.error('ISY messages error:', data);
-        }
-    } catch (error) {
-        console.error('Error loading ISY messages:', error);
-        messagesList.innerHTML = `<p class="error-message">Verbindungsfehler: ${error.message}</p>`;
-    }
-}
 
 // Check ISY status on page load
 document.addEventListener('DOMContentLoaded', function() {
