@@ -1102,22 +1102,61 @@ async function loadISYMessages() {
         const response = await fetch('/api/isy/messages');
         const data = await response.json();
         
+        console.log('ISY Messages Response:', data);
+        
         if (response.ok) {
             if (data.messages && data.messages.length > 0) {
-                messagesList.innerHTML = data.messages.map(msg => `
-                    <div class="isy-message-item">
-                        <div class="isy-message-title">${msg.title || msg.id || 'Mitteilung'}</div>
-                        ${msg.dtDue ? `<div class="isy-message-date">Fällig: ${new Date(msg.dtDue).toLocaleDateString('de-DE')}</div>` : ''}
-                        ${msg.priority ? `<div class="isy-message-priority">Priorität: ${msg.priority}</div>` : ''}
-                        ${msg.completed ? '<div class="isy-message-completed">✅ Erledigt</div>' : ''}
-                    </div>
-                `).join('');
+                messagesList.innerHTML = data.messages.map(msg => {
+                    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msg.priority] || 'Normal';
+                    const priorityClass = ['low', 'normal', 'high', 'urgent'][msg.priority] || 'normal';
+                    
+                    let dateInfo = '';
+                    if (msg.dtDue) {
+                        dateInfo = `<div class="isy-message-date">📅 Fällig: ${new Date(msg.dtDue).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>`;
+                    } else if (msg.visibleTo) {
+                        dateInfo = `<div class="isy-message-date">📅 Bis: ${new Date(msg.visibleTo).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>`;
+                    }
+                    
+                    const statusBadges = [];
+                    if (msg.completed) {
+                        statusBadges.push('<span class="isy-badge completed">✅ Erledigt</span>');
+                    }
+                    if (msg.readWhen) {
+                        statusBadges.push('<span class="isy-badge read">👁️ Gelesen</span>');
+                    }
+                    if (msg.archivedWhen) {
+                        statusBadges.push('<span class="isy-badge archived">📦 Archiviert</span>');
+                    }
+                    
+                    return `
+                        <div class="isy-message-item priority-${priorityClass}" data-message-id="${msg.id}">
+                            <div class="isy-message-header">
+                                <div class="isy-message-title">${msg.title || 'Keine Titel'}</div>
+                                <div class="isy-message-priority priority-${priorityClass}">
+                                    <span class="priority-dot"></span>${priorityText}
+                                </div>
+                            </div>
+                            ${dateInfo}
+                            ${msg.body ? `<div class="isy-message-body">${msg.body.substring(0, 200)}${msg.body.length > 200 ? '...' : ''}</div>` : ''}
+                            ${statusBadges.length > 0 ? `<div class="isy-message-badges">${statusBadges.join('')}</div>` : ''}
+                        </div>
+                    `;
+                }).join('');
             } else {
                 messagesList.innerHTML = '<p class="no-data">Keine Mitteilungen vorhanden</p>';
             }
         } else {
             // Show error details for debugging
             const errorMsg = data.error || 'Fehler beim Laden der Mitteilungen';
+            const errorDetail = data.message ? `<br><small>${data.message}</small>` : '';
+            messagesList.innerHTML = `<p class="error-message">${errorMsg}${errorDetail}</p>`;
+            console.error('ISY messages error:', data);
+        }
+    } catch (error) {
+        console.error('Error loading ISY messages:', error);
+        messagesList.innerHTML = `<p class="error-message">Verbindungsfehler: ${error.message}</p>`;
+    }
+}
             const errorDetail = data.message ? `<br><small>${data.message}</small>` : '';
             messagesList.innerHTML = `<p class="error-message">${errorMsg}${errorDetail}</p>`;
             console.error('ISY messages error:', data);

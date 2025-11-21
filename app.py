@@ -217,56 +217,53 @@ def fetch_isy_messages(token, person_id):
     Fetch messages from ISY using GraphQL API with authenticated session
     Returns list of messages or None on error
     
-    Uses ISY's GraphQL API to fetch todos/messages
+    Uses ISY's GraphQL API to fetch messages with full details
     """
     try:
-        # GraphQL query for fetching personal todos/messages
-        # Based on the user's provided example
+        # GraphQL query for fetching messages with all important fields
         graphql_query = """
-        query fetchPersonalTodos($me: String!, $segment: String!, $outputContext: String, $first: Int, $after: String, $last: Int, $before: String) {
+        query fetchMessages($me: String!, $first: Int, $after: String) {
           messages(
-            context: {iri: $me, segment: $segment}
-            outputContext: $outputContext
+            context: {iri: $me}
             first: $first
             after: $after
-            last: $last
-            before: $before
+            order: {visibleTo: "DESC"}
           ) {
             pageInfo {
               hasNextPage
               hasPreviousPage
               startCursor
               endCursor
-              __typename
             }
             edges {
               node {
                 _id
                 id
                 title
+                subject
+                body
+                status
+                priority
+                dtFrom
+                dtTo
+                visibleFrom
+                visibleTo
                 dtDue
-                recurrenceSettings
-                iCanDelete
+                shownIn
+                authLevel
+                accomplished
                 me {
                   id
+                  readWhen
+                  seenWhen
+                  archivedWhen
                   priorityTodo
                   positionTodo
                   completedWhen
                   modified
-                  modifiedby
-                  created
-                  person {
-                    id
-                    loginid
-                    __typename
-                  }
-                  __typename
                 }
-                __typename
               }
-              __typename
             }
-            __typename
           }
         }
         """
@@ -274,8 +271,7 @@ def fetch_isy_messages(token, person_id):
         # GraphQL variables
         variables = {
             "me": person_id,
-            "segment": "todosUserOpen",
-            "first": 50,
+            "first": 100,
             "after": None
         }
         
@@ -287,30 +283,55 @@ def fetch_isy_messages(token, person_id):
         }
         
         payload = {
-            'operationName': 'fetchPersonalTodos',
+            'operationName': 'fetchMessages',
             'variables': variables,
             'query': graphql_query
         }
         
+        print(f"Fetching ISY messages for person: {person_id}")
         response = requests.post(ISY_API_URL, json=payload, headers=headers, timeout=10)
         response.raise_for_status()
         
         data = response.json()
+        print(f"ISY API Response: {data}")
+        
+        # Check for GraphQL errors
+        if 'errors' in data:
+            print(f"GraphQL errors: {data['errors']}")
+            return None
         
         # Extract messages from GraphQL response
         messages = []
         if 'data' in data and 'messages' in data['data']:
             edges = data['data']['messages'].get('edges', [])
+            print(f"Found {len(edges)} messages")
             for edge in edges:
                 node = edge.get('node', {})
+                me = node.get('me', {})
                 messages.append({
                     'id': node.get('_id'),
-                    'title': node.get('title'),
+                    'title': node.get('title', 'Keine Titel'),
+                    'subject': node.get('subject'),
+                    'body': node.get('body'),
+                    'priority': node.get('priority', 0),
+                    'status': node.get('status'),
+                    'dtFrom': node.get('dtFrom'),
+                    'dtTo': node.get('dtTo'),
+                    'visibleFrom': node.get('visibleFrom'),
+                    'visibleTo': node.get('visibleTo'),
                     'dtDue': node.get('dtDue'),
-                    'completed': node.get('me', {}).get('completedWhen') is not None,
-                    'priority': node.get('me', {}).get('priorityTodo'),
-                    'position': node.get('me', {}).get('positionTodo')
+                    'shownIn': node.get('shownIn'),
+                    'accomplished': node.get('accomplished'),
+                    'completed': me.get('completedWhen') is not None,
+                    'completedWhen': me.get('completedWhen'),
+                    'readWhen': me.get('readWhen'),
+                    'seenWhen': me.get('seenWhen'),
+                    'archivedWhen': me.get('archivedWhen'),
+                    'priorityTodo': me.get('priorityTodo'),
+                    'positionTodo': me.get('positionTodo')
                 })
+        else:
+            print(f"No messages data in response: {data}")
         
         return messages
         
