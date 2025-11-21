@@ -872,7 +872,7 @@ def isy_dashboard_messages():
         }
         
         response = requests.post(
-            ISY_GRAPHQL_URL,
+            ISY_API_URL,
             json={'query': query, 'variables': variables, 'operationName': 'getInboxMessages'},
             headers=headers,
             timeout=10
@@ -908,13 +908,25 @@ def isy_dashboard_messages():
                     lastname = author_person.get('lastname', '')
                     author_name = f"{firstname} {lastname}".strip() or 'Unbekannt'
                 
+                # Map priority string to number (LOW=0, NORMAL=1, HIGH=2, URGENT/CRITICAL=3)
+                priority_str = node.get('priority', 'NORMAL')
+                priority_map = {
+                    'LOW': 0,
+                    'NORMAL': 1,
+                    'HIGH': 2,
+                    'URGENT': 3,
+                    'CRITICAL': 3
+                }
+                priority_num = priority_map.get(priority_str, 1)  # Default to NORMAL
+                
                 messages.append({
                     'id': node.get('id'),
                     '_id': node.get('_id'),
                     'title': node.get('calculatedExtendedTitleShort') or node.get('subject') or 'Keine Titel',
                     'subject': node.get('subject'),
                     'previewText': node.get('previewText'),
-                    'priority': node.get('priority', 1),
+                    'priority': priority_num,
+                    'priorityStr': priority_str,
                     'status': node.get('status'),
                     'visibleTo': node.get('visibleTo'),
                     'iHaveReadIt': node.get('iHaveReadIt', False),
