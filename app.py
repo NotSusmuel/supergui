@@ -166,8 +166,9 @@ def isy_login_required(f):
 def get_isy_person_id(token):
     """
     Get the person ID (IRI) for the authenticated user
-    Decodes JWT token to extract username, then queries ISY GraphQL for person ID
-    Returns None if token is expired or invalid
+    
+    Note: ISY GraphQL doesn't support querying by username or 'me' field,
+    so we use a hardcoded person ID. Update this value in config.py if needed.
     """
     try:
         # First, verify the token is not expired
@@ -176,76 +177,22 @@ def get_isy_person_id(token):
             print("Token verification failed - token may be expired")
             return None
         
-        # Decode JWT token to get username (without verification since we don't have public key)
+        # Decode JWT token to get username for logging
         try:
             decoded = jwt.decode(token, options={"verify_signature": False})
             username = decoded.get('username')
-            print(f"Decoded JWT - Username: {username}")
+            print(f"ISY Login - Username: {username}")
         except Exception as e:
             print(f"Error decoding JWT: {e}")
-            return None
+            # Continue anyway - we don't need username
         
-        if not username:
-            print("No username found in JWT token")
-            return None
-        
-        # GraphQL query to get person ID by username
-        graphql_query = """
-        query getPerson($loginid: String!) {
-          people(loginid: $loginid) {
-            edges {
-              node {
-                id
-                _id
-                loginid
-                firstname
-                lastname
-              }
-            }
-          }
-        }
-        """
-        
-        headers = {
-            'Authorization': f'Bearer {token}',
-            'Content-Type': 'application/json',
-            'Accept': '*/*'
-        }
-        
-        payload = {
-            'query': graphql_query,
-            'variables': {
-                'loginid': username
-            }
-        }
-        
-        print(f"Fetching person ID from ISY GraphQL API for username: {username}")
-        response = requests.post(ISY_API_URL, json=payload, headers=headers, timeout=10)
-        print(f"Response status: {response.status_code}")
-        
-        response.raise_for_status()
-        
-        data = response.json()
-        print(f"GraphQL response: {data}")
-        
-        # Check for GraphQL errors
-        if 'errors' in data:
-            print(f"GraphQL errors: {data['errors']}")
-            # Try alternative query using 'me' endpoint
-            return get_person_id_from_me(token)
-        
-        # Extract person ID from response
-        if 'data' in data and 'people' in data['data']:
-            edges = data['data']['people'].get('edges', [])
-            if edges and len(edges) > 0:
-                person = edges[0]['node']
-                person_id = person['id']
-                print(f"Found person ID: {person_id}")
-                return person_id
-        
-        # If that didn't work, try the 'me' query as fallback
-        print("Trying fallback 'me' query...")
-        return get_person_id_from_me(token)
+        # Hardcoded person ID since ISY GraphQL doesn't support lookup queries
+        # The GraphQL schema doesn't support people(loginid:) or me queries
+        # If you're a different user, find your person ID in ISY network requests
+        # and update it here or in config.py
+        person_id = "/people/4064"
+        print(f"Using person ID: {person_id}")
+        return person_id
     
     except Exception as e:
         print(f"Error getting person ID: {str(e)}")
