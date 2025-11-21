@@ -193,17 +193,40 @@ def get_isy_person_id(token):
             'query': graphql_query
         }
         
+        print(f"Fetching person ID from ISY GraphQL API...")
         response = requests.post(ISY_API_URL, json=payload, headers=headers, timeout=10)
+        print(f"Response status: {response.status_code}")
+        
         response.raise_for_status()
         
         data = response.json()
+        print(f"GraphQL response: {data}")
+        
+        # Check for GraphQL errors
+        if 'errors' in data:
+            print(f"GraphQL errors: {data['errors']}")
+            return None
         
         # Extract person ID from response
         if 'data' in data and 'me' in data['data']:
-            person = data['data']['me'].get('person')
+            me_data = data['data']['me']
+            print(f"Me data: {me_data}")
+            
+            # Try to get person ID from me.person.id
+            person = me_data.get('person')
             if person and 'id' in person:
-                return person['id']
+                person_id = person['id']
+                print(f"Found person ID: {person_id}")
+                return person_id
+            
+            # Alternative: me might directly have the person IRI
+            if 'id' in me_data:
+                # Sometimes the person IRI is in the me.id field itself
+                me_id = me_data['id']
+                print(f"Using me.id as fallback: {me_id}")
+                return me_id
         
+        print("Could not extract person ID from response")
         return None
         
     except Exception as e:
