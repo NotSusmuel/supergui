@@ -1153,10 +1153,25 @@ async function loadISYMessages() {
                 messagesList.innerHTML = '<p class="no-data">Keine Mitteilungen vorhanden</p>';
             }
         } else {
-            // Show error details for debugging
-            const errorMsg = data.error || 'Fehler beim Laden der Mitteilungen';
-            const errorDetail = data.message ? `<br><small>${data.message}</small>` : '';
-            messagesList.innerHTML = `<p class="error-message">${errorMsg}${errorDetail}</p>`;
+            // Check if token expired
+            if (data.login_required) {
+                // Token expired - clear auth state and prompt re-login
+                isyAuthenticated = false;
+                localStorage.removeItem('isyAuthenticated');
+                messagesList.innerHTML = '<p class="error-message">Sitzung abgelaufen - bitte erneut anmelden</p>';
+                
+                // Update UI to show login button
+                const isyButton = document.getElementById('isyLoginBtn');
+                if (isyButton) {
+                    isyButton.textContent = translations[currentLanguage].isyLogin;
+                    isyButton.classList.remove('authenticated');
+                }
+            } else {
+                // Show error details for debugging
+                const errorMsg = data.error || 'Fehler beim Laden der Mitteilungen';
+                const errorDetail = data.message ? `<br><small>${data.message}</small>` : '';
+                messagesList.innerHTML = `<p class="error-message">${errorMsg}${errorDetail}</p>`;
+            }
             console.error('ISY messages error:', data);
         }
     } catch (error) {
@@ -1216,8 +1231,23 @@ async function loadISYDashboardMessages() {
                 dashboardDiv.innerHTML = '<p class="no-data">Keine Mitteilungen vorhanden</p>';
             }
         } else {
-            const errorMsg = data.error || 'Fehler beim Laden';
-            dashboardDiv.innerHTML = `<p class="error-message">${errorMsg}</p>`;
+            // Check if token expired
+            if (data.login_required) {
+                // Token expired - clear auth state
+                isyAuthenticated = false;
+                localStorage.removeItem('isyAuthenticated');
+                dashboardDiv.innerHTML = '<p class="error-message">Sitzung abgelaufen - bitte erneut anmelden</p>';
+                
+                // Update UI to show login button
+                const isyButton = document.getElementById('isyLoginBtn');
+                if (isyButton) {
+                    isyButton.textContent = translations[currentLanguage].isyLogin;
+                    isyButton.classList.remove('authenticated');
+                }
+            } else {
+                const errorMsg = data.error || 'Fehler beim Laden';
+                dashboardDiv.innerHTML = `<p class="error-message">${errorMsg}</p>`;
+            }
             console.error('ISY dashboard messages error:', data);
         }
     } catch (error) {

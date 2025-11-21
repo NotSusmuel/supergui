@@ -1,5 +1,5 @@
 from flask import Flask, render_template, jsonify, request, session
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import pytz
 import csv
 import requests
@@ -130,7 +130,8 @@ def verify_isy_token(token):
         # Check if token is expired
         if 'exp' in decoded:
             exp_timestamp = decoded['exp']
-            if datetime.utcnow().timestamp() > exp_timestamp:
+            if datetime.now(timezone.utc).timestamp() > exp_timestamp:
+                print(f"Token expired at {datetime.fromtimestamp(exp_timestamp, timezone.utc)}")
                 return None
         
         return decoded
@@ -166,8 +167,15 @@ def get_isy_person_id(token):
     """
     Get the person ID (IRI) for the authenticated user
     Decodes JWT token to extract username, then queries ISY GraphQL for person ID
+    Returns None if token is expired or invalid
     """
     try:
+        # First, verify the token is not expired
+        token_data = verify_isy_token(token)
+        if not token_data:
+            print("Token verification failed - token may be expired")
+            return None
+        
         # Decode JWT token to get username (without verification since we don't have public key)
         try:
             decoded = jwt.decode(token, options={"verify_signature": False})
@@ -819,6 +827,18 @@ def isy_messages():
         person_id = get_isy_person_id(token)
         
         if not person_id:
+            # Check if token is expired
+            token_data = verify_isy_token(token)
+            if not token_data:
+                # Token expired, clear session and return auth error
+                session.pop('isy_token', None)
+                session.pop('isy_username', None)
+                return jsonify({
+                    'error': 'ISY session expired',
+                    'message': 'Your ISY login has expired. Please log in again.',
+                    'login_required': True
+                }), 401
+            
             return jsonify({
                 'error': 'Could not get user person ID',
                 'message': 'Failed to fetch person information from ISY. Please try logging in again.'
@@ -858,6 +878,18 @@ def isy_dashboard_messages():
         person_id = get_isy_person_id(token)
         
         if not person_id:
+            # Check if token is expired
+            token_data = verify_isy_token(token)
+            if not token_data:
+                # Token expired, clear session and return auth error
+                session.pop('isy_token', None)
+                session.pop('isy_username', None)
+                return jsonify({
+                    'error': 'ISY session expired',
+                    'message': 'Your ISY login has expired. Please log in again.',
+                    'login_required': True
+                }), 401
+            
             return jsonify({
                 'error': 'Could not get user person ID',
                 'message': 'Failed to fetch person information from ISY. Please try logging in again.'
