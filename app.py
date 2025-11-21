@@ -165,19 +165,100 @@ def isy_login_required(f):
 def get_isy_person_id(token):
     """
     Get the person ID (IRI) for the authenticated user
-    Uses GraphQL to query the current user's person information
+    Decodes JWT token to extract username, then queries ISY GraphQL for person ID
     """
     try:
-        # GraphQL query to get current user's person info
+        # Decode JWT token to get username (without verification since we don't have public key)
+        try:
+            decoded = jwt.decode(token, options={"verify_signature": False})
+            username = decoded.get('username')
+            print(f"Decoded JWT - Username: {username}")
+        except Exception as e:
+            print(f"Error decoding JWT: {e}")
+            return None
+        
+        if not username:
+            print("No username found in JWT token")
+            return None
+        
+        # GraphQL query to get person ID by username
+        graphql_query = """
+        query getPerson($loginid: String!) {
+          people(loginid: $loginid) {
+            edges {
+              node {
+                id
+                _id
+                loginid
+                firstname
+                lastname
+              }
+            }
+          }
+        }
+        """
+        
+        headers = {
+            'Authorization': f'Bearer {token}',
+            'Content-Type': 'application/json',
+            'Accept': '*/*'
+        }
+        
+        payload = {
+            'query': graphql_query,
+            'variables': {
+                'loginid': username
+            }
+        }
+        
+        print(f"Fetching person ID from ISY GraphQL API for username: {username}")
+        response = requests.post(ISY_API_URL, json=payload, headers=headers, timeout=10)
+        print(f"Response status: {response.status_code}")
+        
+        response.raise_for_status()
+        
+        data = response.json()
+        print(f"GraphQL response: {data}")
+        
+        # Check for GraphQL errors
+        if 'errors' in data:
+            print(f"GraphQL errors: {data['errors']}")
+            # Try alternative query using 'me' endpoint
+            return get_person_id_from_me(token)
+        
+        # Extract person ID from response
+        if 'data' in data and 'people' in data['data']:
+            edges = data['data']['people'].get('edges', [])
+            if edges and len(edges) > 0:
+                person = edges[0]['node']
+                person_id = person['id']
+                print(f"Found person ID: {person_id}")
+                return person_id
+        
+        # If that didn't work, try the 'me' query as fallback
+        print("Trying fallback 'me' query...")
+        return get_person_id_from_me(token)
+    
+    except Exception as e:
+        print(f"Error getting person ID: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return None
+
+
+def get_person_id_from_me(token):
+    """
+    Fallback method to get person ID using 'me' query
+    """
+    try:
         graphql_query = """
         query {
           me {
             id
             person {
               id
+              _id
               loginid
-              firstname
-              lastname
             }
           }
         }
@@ -193,35 +274,27 @@ def get_isy_person_id(token):
             'query': graphql_query
         }
         
-        print(f"Fetching person ID from ISY GraphQL API...")
+        print(f"Trying 'me' query fallback...")
         response = requests.post(ISY_API_URL, json=payload, headers=headers, timeout=10)
-        print(f"Response status: {response.status_code}")
         
         response.raise_for_status()
         
         data = response.json()
-        print(f"GraphQL response: {data}")
-        
-        # Check for GraphQL errors
-        if 'errors' in data:
-            print(f"GraphQL errors: {data['errors']}")
-            return None
+        print(f"Me query response: {data}")
         
         # Extract person ID from response
         if 'data' in data and 'me' in data['data']:
             me_data = data['data']['me']
-            print(f"Me data: {me_data}")
             
             # Try to get person ID from me.person.id
             person = me_data.get('person')
             if person and 'id' in person:
                 person_id = person['id']
-                print(f"Found person ID: {person_id}")
+                print(f"Found person ID from me.person.id: {person_id}")
                 return person_id
             
-            # Alternative: me might directly have the person IRI
+            # Sometimes the person IRI is in the me.id field itself
             if 'id' in me_data:
-                # Sometimes the person IRI is in the me.id field itself
                 me_id = me_data['id']
                 print(f"Using me.id as fallback: {me_id}")
                 return me_id
