@@ -106,12 +106,22 @@ SUBJECT_MAPPING = {
 # 'Subject Name': 'onenote:https://YOUR-SCHOOL.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
 #
 ONENOTE_LINKS = {
-    # Add your subject OneNote links here
-    # Example:
-    # 'Französisch': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
-    # 'Mathematik': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
-    # 'Deutsch': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
-    # Add more subjects as needed...
+    # OneNote notebook links for each subject
+    # Replace the placeholder URLs below with your actual OneNote notebook URLs
+    'Mathematik': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-math}&action=edit',
+    'Deutsch': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-deutsch}&action=edit',
+    'Französisch': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-franz}&action=edit',
+    'Englisch': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-english}&action=edit',
+    'Biologie': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-bio}&action=edit',
+    'Chemie': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-chemie}&action=edit',
+    'Physik': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-physik}&action=edit',
+    'Informatik': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-info}&action=edit',
+    'Geschichte': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-geschichte}&action=edit',
+    'Geografie': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-geografie}&action=edit',
+    'Wirtschaft und Recht': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-wr}&action=edit',
+    'Musik': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-musik}&action=edit',
+    'Sport': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-sport}&action=edit',
+    'Bildnerisches Gestalten': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-bg}&action=edit',
 }
 
 # ISY Authentication Functions
