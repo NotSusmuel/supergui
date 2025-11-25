@@ -70,6 +70,7 @@ _timetable_cache = {
 CACHE_DURATION = 300  # 5 minutes cache
 
 # Subject abbreviation mapping
+# Subjects are matched by prefix (e.g., "BIO1" matches "BIO" -> "Biologie")
 SUBJECT_MAPPING = {
     'IF': 'Informatik',
     'F': 'Französisch',
@@ -77,15 +78,14 @@ SUBJECT_MAPPING = {
     'M': 'Mathematik',
     'D': 'Deutsch',
     'WR': 'Wirtschaft und Recht',
-    'SP05': 'Sport',
-    'BG08': 'Bildnerisches Gestalten',
+    'SP': 'Sport',
+    'BG': 'Bildnerisches Gestalten',
     'E': 'Englisch',
     'GG': 'Geografie',
     'BIO': 'Biologie',
-    'BIO1': 'Biologie',
     'G': 'Geschichte',
     'CH': 'Chemie',
-    'CH1': 'Chemie',
+    'KS': 'Klassenstunde',
     # Legacy mappings for sample data
     'MA': 'Mathematik',
     'DE': 'Deutsch',
@@ -93,6 +93,9 @@ SUBJECT_MAPPING = {
     'PH': 'Physik',
     'IN': 'Informatik'
 }
+
+# Pre-computed sorted prefixes for efficient prefix matching (longest first)
+_SUBJECT_PREFIXES_SORTED = sorted(SUBJECT_MAPPING.keys(), key=len, reverse=True)
 
 # OneNote notebook links for each subject
 # IMPORTANT: Replace these with YOUR OWN OneNote notebook URLs
@@ -122,6 +125,7 @@ ONENOTE_LINKS = {
     'Musik': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-musik}&action=edit',
     'Sport': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-sport}&action=edit',
     'Bildnerisches Gestalten': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-bg}&action=edit',
+    'Klassenstunde': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-ks}&action=edit',
 }
 
 # ISY Authentication Functions
@@ -403,8 +407,22 @@ def fetch_isy_messages(token, person_id):
         return None
 
 def get_subject_name(abbreviation):
-    """Convert subject abbreviation to full name"""
-    return SUBJECT_MAPPING.get(abbreviation, abbreviation)
+    """Convert subject abbreviation to full name using prefix matching.
+    
+    Subjects like 'BIO1', 'CH1', 'SP05' will match 'BIO', 'CH', 'SP' respectively.
+    """
+    # First try exact match
+    if abbreviation in SUBJECT_MAPPING:
+        return SUBJECT_MAPPING[abbreviation]
+    
+    # Try prefix matching - find the longest matching prefix
+    # Uses pre-computed sorted list for efficiency
+    for prefix in _SUBJECT_PREFIXES_SORTED:
+        if abbreviation.startswith(prefix):
+            return SUBJECT_MAPPING[prefix]
+    
+    # Return original if no match found
+    return abbreviation
 
 
 def fetch_and_convert_ics_to_csv(url):
