@@ -1374,6 +1374,11 @@ body::before {
 .current-notebook.compact {
     padding: 6px !important;
     font-size: 0.75rem !important;
+    display: block !important;
+}
+
+.current-notebook.compact .lesson-card {
+    width: 100% !important;
 }
 
 .current-notebook.compact .lesson-title {
