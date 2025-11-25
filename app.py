@@ -1011,8 +1011,9 @@ def isy_dashboard_messages():
                     'modified': node.get('modified'),
                     'lastContentChange': node.get('lastContentChange'),
                     'author': author_name,
-                    'seenWhen': me.get('seenWhen'),
-                    'readWhen': me.get('readWhen')
+                    'meId': me.get('id') if me else None,
+                    'seenWhen': me.get('seenWhen') if me else None,
+                    'readWhen': me.get('readWhen') if me else None
                 })
         
         print(f"Found {len(messages)} dashboard messages")
@@ -1298,7 +1299,7 @@ def isy_archive_messages():
         """
         
         variables = {
-            'me': f'/people/{person_id}',
+            'me': person_id if person_id.startswith('/people/') else f'/people/{person_id}',
             'first': 60,
             'after': None
         }
