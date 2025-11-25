@@ -1312,6 +1312,42 @@ async function toggleArchiveMessage(meId, action) {
     }
 }
 
+// Archive message from the modal view
+async function archiveMessageFromModal(meId) {
+    if (!meId) {
+        console.error('No meId provided for archive action');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/isy/archive-message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                recipientId: meId,
+                archive: 'Archive'
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Close modal and reload messages
+            closeMessageModal();
+            loadISYDashboardMessages();
+            alert('Nachricht archiviert');
+        } else {
+            console.error('Failed to archive message:', data.error);
+            alert('Fehler beim Archivieren: ' + (data.error || 'Unbekannter Fehler'));
+        }
+    } catch (error) {
+        console.error('Error archiving message:', error);
+        alert('Verbindungsfehler beim Archivieren');
+    }
+}
+
 // Show message modal with full details
 async function showMessageModal(msg) {
     const modal = document.getElementById('messageModal');
@@ -1387,6 +1423,8 @@ async function showMessageModal(msg) {
             }
             
             // Build attachments list
+            // Note: Attachments can't be directly linked as ISY uses UUIDs that aren't exposed in the API
+            // We'll show the attachment names and indicate they should be viewed in ISY
             let attachmentsHtml = '';
             if (fullMsg.attachments && fullMsg.attachments.edges && fullMsg.attachments.edges.length > 0) {
                 const attachmentItems = fullMsg.attachments.edges.map(edge => {
@@ -1394,12 +1432,12 @@ async function showMessageModal(msg) {
                     const iconClass = doc.mimetype.includes('pdf') ? 'pdf' : 
                                      doc.mimetype.includes('image') ? 'image' : 'file';
                     return `
-                        <a href="https://isy-api.ksr.ch/documents/${doc.internalfile}" target="_blank" class="attachment-item ${iconClass}">
+                        <div class="attachment-item ${iconClass}">
                             <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
                             </svg>
                             <span>${doc.filename}</span>
-                        </a>
+                        </div>
                     `;
                 }).join('');
                 
@@ -1410,6 +1448,7 @@ async function showMessageModal(msg) {
                                 <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
                             </svg>
                             <span>Anhänge (${fullMsg.attachments.edges.length})</span>
+                            <a href="https://isy.ksr.ch/messages/${fullMsg._id}" target="_blank" class="view-in-isy-btn">In ISY öffnen</a>
                         </div>
                         <div class="attachments-list">
                             ${attachmentItems}
@@ -1417,6 +1456,27 @@ async function showMessageModal(msg) {
                     </div>
                 `;
             }
+            
+            // Get the me.id for archiving from the message
+            const meId = fullMsg.me ? fullMsg.me.id : (msg.meId || '');
+            
+            // Build archive button
+            const archiveButtonHtml = meId ? `
+                <div class="message-actions">
+                    <button class="message-archive-btn" onclick="archiveMessageFromModal('${meId}')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
+                        </svg>
+                        Archivieren
+                    </button>
+                    <a href="https://isy.ksr.ch/messages/${fullMsg._id}" target="_blank" class="message-open-isy-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
+                        </svg>
+                        In ISY öffnen
+                    </a>
+                </div>
+            ` : '';
             
             const modalContent = `
                 <div class="message-detail-container">
@@ -1439,6 +1499,7 @@ async function showMessageModal(msg) {
                             </div>
                         </div>
                         ${attachmentsHtml}
+                        ${archiveButtonHtml}
                     </div>
                 </div>
             `;

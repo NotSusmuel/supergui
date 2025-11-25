@@ -1222,9 +1222,8 @@ def isy_archive_messages():
         person_id = session.get('isy_person_id')
         if not person_id:
             # Try to fetch person info
-            person_info = fetch_isy_person_info(token)
-            if person_info and person_info.get('person_id'):
-                person_id = person_info['person_id']
+            person_id = get_isy_person_id(token)
+            if person_id:
                 session['isy_person_id'] = person_id
             else:
                 return jsonify({
