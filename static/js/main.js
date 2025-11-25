@@ -1259,28 +1259,38 @@ async function showMessageModal(msg) {
     const modal = document.getElementById('messageModal');
     if (!modal) return;
     
-    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msg.priority] || 'Normal';
-    const priorityClass = ['low', 'normal', 'high', 'urgent'][msg.priority] || 'normal';
+    const priorityMap = { 'LOW': 0, 'NORMAL': 1, 'HIGH': 2, 'URGENT': 3 };
+    const priorityIndex = typeof msg.priority === 'string' ? (priorityMap[msg.priority] || 1) : (msg.priority || 1);
+    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][priorityIndex] || 'Normal';
+    const priorityClass = ['low', 'normal', 'high', 'urgent'][priorityIndex] || 'normal';
     
-    // Show loading state
+    // Show loading state with modern design
     modal.querySelector('.modal-content').innerHTML = `
-        <div class="message-modal-header priority-${priorityClass}">
-            <h2>${msg.title}</h2>
-            <button class="close-btn" onclick="closeMessageModal()">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
-            </button>
-        </div>
-        <div class="message-modal-body">
-            <div class="loading">Lade Nachricht...</div>
+        <div class="message-detail-container">
+            <div class="message-detail-header priority-${priorityClass}">
+                <div class="message-header-content">
+                    <h2 class="message-detail-title">${msg.title}</h2>
+                </div>
+                <button class="message-close-btn" onclick="closeMessageModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="message-detail-body">
+                <div class="message-loading">
+                    <div class="loading-spinner"></div>
+                    <span>Lade Nachricht...</span>
+                </div>
+            </div>
         </div>
     `;
     modal.style.display = 'flex';
     
     try {
         // Fetch full message details from API
-        const response = await fetch(`/api/isy/message/${msg.id.split('/')[2]}`, {
+        const messageId = msg.id ? msg.id.split('/')[2] : msg._id;
+        const response = await fetch(`/api/isy/message/${messageId}`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
@@ -1292,29 +1302,85 @@ async function showMessageModal(msg) {
         if (data.success && data.message) {
             const fullMsg = data.message;
             
-            let dateInfo = '';
-            if (fullMsg.visibleTo) {
-                const date = new Date(fullMsg.visibleTo);
-                dateInfo = `Sichtbar bis: ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+            // Get priority from response
+            const msgPriority = fullMsg.priority || 'NORMAL';
+            const msgPriorityIndex = priorityMap[msgPriority] || 1;
+            const msgPriorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msgPriorityIndex] || 'Normal';
+            const msgPriorityClass = ['low', 'normal', 'high', 'urgent'][msgPriorityIndex] || 'normal';
+            
+            // Build author info
+            let authorHtml = '';
+            if (fullMsg.primaryAuthor && fullMsg.primaryAuthor.person) {
+                const author = fullMsg.primaryAuthor.person;
+                const authorGroup = author.primaryGroup ? author.primaryGroup.descShort : '';
+                authorHtml = `
+                    <div class="message-author-card">
+                        <div class="author-avatar">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                            </svg>
+                        </div>
+                        <div class="author-info">
+                            <span class="author-name">${author.firstname} ${author.lastname}</span>
+                            ${authorGroup ? `<span class="author-group">${authorGroup}</span>` : ''}
+                        </div>
+                    </div>
+                `;
+            }
+            
+            // Build attachments list
+            let attachmentsHtml = '';
+            if (fullMsg.attachments && fullMsg.attachments.edges && fullMsg.attachments.edges.length > 0) {
+                const attachmentItems = fullMsg.attachments.edges.map(edge => {
+                    const doc = edge.node.document;
+                    const iconClass = doc.mimetype.includes('pdf') ? 'pdf' : 
+                                     doc.mimetype.includes('image') ? 'image' : 'file';
+                    return `
+                        <a href="https://isy-api.ksr.ch/documents/${doc.internalfile}" target="_blank" class="attachment-item ${iconClass}">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+                            </svg>
+                            <span>${doc.filename}</span>
+                        </a>
+                    `;
+                }).join('');
+                
+                attachmentsHtml = `
+                    <div class="message-attachments">
+                        <div class="attachments-header">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
+                            </svg>
+                            <span>Anhänge (${fullMsg.attachments.edges.length})</span>
+                        </div>
+                        <div class="attachments-list">
+                            ${attachmentItems}
+                        </div>
+                    </div>
+                `;
             }
             
             const modalContent = `
-                <div class="message-modal-header priority-${priorityClass}">
-                    <h2>${fullMsg.calculatedExtendedTitle || fullMsg.title || msg.title}</h2>
-                    <button class="close-btn" onclick="closeMessageModal()">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="message-modal-body">
-                    <div class="message-meta">
-                        ${fullMsg.primaryAuthor && fullMsg.primaryAuthor.person ? `<div class="message-author">👤 <strong>${fullMsg.primaryAuthor.person.firstname} ${fullMsg.primaryAuthor.person.lastname}</strong></div>` : ''}
-                        ${dateInfo ? `<div class="message-date">📅 ${dateInfo}</div>` : ''}
-                        <div class="message-priority">Priorität: <span class="priority-badge ${priorityClass}">${priorityText}</span></div>
+                <div class="message-detail-container">
+                    <div class="message-detail-header priority-${msgPriorityClass}">
+                        <div class="message-header-content">
+                            <span class="message-priority-badge ${msgPriorityClass}">${msgPriorityText}</span>
+                            <h2 class="message-detail-title">${fullMsg.calculatedExtendedTitle || fullMsg.title || msg.title}</h2>
+                        </div>
+                        <button class="message-close-btn" onclick="closeMessageModal()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                            </svg>
+                        </button>
                     </div>
-                    <div class="message-content">
-                        ${fullMsg.body || fullMsg.subject || msg.previewText || 'Kein Inhalt verfügbar'}
+                    <div class="message-detail-body">
+                        ${authorHtml}
+                        <div class="message-content-wrapper">
+                            <div class="message-body-content">
+                                ${fullMsg.body || fullMsg.subject || '<p>Kein Inhalt verfügbar</p>'}
+                            </div>
+                        </div>
+                        ${attachmentsHtml}
                     </div>
                 </div>
             `;
@@ -1325,30 +1391,44 @@ async function showMessageModal(msg) {
         }
     } catch (error) {
         console.error('Error loading full message:', error);
-        // Fallback to preview data
-        let dateInfo = '';
-        if (msg.visibleTo) {
-            const date = new Date(msg.visibleTo);
-            dateInfo = `Sichtbar bis: ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
-        }
-        
+        // Fallback to preview data with modern design
         const modalContent = `
-            <div class="message-modal-header priority-${priorityClass}">
-                <h2>${msg.title}</h2>
-                <button class="close-btn" onclick="closeMessageModal()">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="message-modal-body">
-                <div class="message-meta">
-                    ${msg.author ? `<div class="message-author">👤 <strong>${msg.author}</strong></div>` : ''}
-                    ${dateInfo ? `<div class="message-date">📅 ${dateInfo}</div>` : ''}
-                    <div class="message-priority">Priorität: <span class="priority-badge ${priorityClass}">${priorityText}</span></div>
+            <div class="message-detail-container">
+                <div class="message-detail-header priority-${priorityClass}">
+                    <div class="message-header-content">
+                        <span class="message-priority-badge ${priorityClass}">${priorityText}</span>
+                        <h2 class="message-detail-title">${msg.title}</h2>
+                    </div>
+                    <button class="message-close-btn" onclick="closeMessageModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
                 </div>
-                <div class="message-content">
-                    ${msg.previewText || 'Kein Inhalt verfügbar'}
+                <div class="message-detail-body">
+                    ${msg.author ? `
+                        <div class="message-author-card">
+                            <div class="author-avatar">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                </svg>
+                            </div>
+                            <div class="author-info">
+                                <span class="author-name">${msg.author}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    <div class="message-content-wrapper">
+                        <div class="message-body-content">
+                            <p>${msg.previewText || 'Kein Inhalt verfügbar'}</p>
+                        </div>
+                    </div>
+                    <div class="message-error-note">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                        </svg>
+                        <span>Vollständiger Inhalt konnte nicht geladen werden</span>
+                    </div>
                 </div>
             </div>
         `;

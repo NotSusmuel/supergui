@@ -1027,6 +1027,172 @@ def isy_dashboard_messages():
             'message': str(e)
         }), 500
 
+@app.route('/api/isy/message/<int:message_id>')
+def isy_message_detail(message_id):
+    """
+    Fetch full message details using getMessageDetail GraphQL query
+    Returns complete message with body, author, attachments, etc.
+    """
+    try:
+        # Get token from session or cookie
+        token = session.get('isy_token') or request.cookies.get('isy_token')
+        
+        if not token:
+            return jsonify({
+                'success': False,
+                'error': 'Not authenticated',
+                'login_required': True
+            }), 401
+        
+        # Verify token is still valid
+        decoded = verify_isy_token(token)
+        if not decoded:
+            return jsonify({
+                'success': False,
+                'error': 'Token expired',
+                'login_required': True
+            }), 401
+        
+        # GraphQL query for message detail (from ISY API)
+        query = """
+        query getMessageDetail($id: ID!, $authLevel: Int, $outputContext: String) {
+          message: exMessage(id: $id, outputContext: $outputContext) {
+            id
+            _id
+            priority
+            status
+            visibleFrom
+            visibleTo
+            authLevel
+            public
+            private
+            dtFrom
+            dtTo
+            dtDue
+            shownIn
+            calculatedTitleShort
+            calculatedExtendedTitle
+            title
+            subject
+            body
+            form
+            created
+            createdby
+            modified
+            modifiedby
+            iAmAuthor
+            iAmOwner
+            iAmRecipient
+            iAmAddressed
+            iCanEdit
+            isAppointment
+            isTodo
+            iHaveReadIt
+            showOnScreens
+            repliesAllowed
+            lastContentChange
+            primaryAuthor {
+              id
+              _id
+              role
+              shownIn
+              person {
+                id
+                _id
+                firstname
+                lastname
+                primaryGroup {
+                  id
+                  _id
+                  descShort
+                  description
+                  __typename
+                }
+                __typename
+              }
+              __typename
+            }
+            attachments(first: 200, order: {position: "asc"}, showDeleted: false, authLevelBitFilter: $authLevel) {
+              edges {
+                node {
+                  id
+                  _id
+                  position
+                  authLevel
+                  document {
+                    id
+                    _id
+                    smallThumbUrl
+                    internalfile
+                    filename
+                    description
+                    mimetype
+                    __typename
+                  }
+                  __typename
+                }
+                __typename
+              }
+              __typename
+            }
+            __typename
+          }
+        }
+        """
+        
+        variables = {
+            'id': f'/messages/{message_id}',
+            'authLevel': 5,
+            'outputContext': 'messages:detail'
+        }
+        
+        response = requests.post(
+            'https://isy-api.ksr.ch/graphql',
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'Accept': '*/*',
+                'Origin': 'https://isy.ksr.ch',
+                'Referer': 'https://isy.ksr.ch/'
+            },
+            json={
+                'operationName': 'getMessageDetail',
+                'query': query,
+                'variables': variables
+            },
+            timeout=15
+        )
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'API error: {response.status_code}'
+            }), response.status_code
+        
+        data = response.json()
+        print(f"Message Detail Response for {message_id}: {data}")
+        
+        if 'data' in data and 'message' in data['data'] and data['data']['message']:
+            msg = data['data']['message']
+            return jsonify({
+                'success': True,
+                'message': msg
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Message not found'
+            }), 404
+            
+    except Exception as e:
+        print(f"Error fetching message detail: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/timetable')
 def get_timetable():
     """API endpoint to get timetable data with caching for performance"""
