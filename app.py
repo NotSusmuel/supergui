@@ -1193,6 +1193,296 @@ def isy_message_detail(message_id):
             'error': str(e)
         }), 500
 
+@app.route('/api/isy/archive-messages')
+def isy_archive_messages():
+    """
+    Fetch archived messages using getPersonalArchiveMessages GraphQL query
+    """
+    try:
+        # Get token from session or cookie
+        token = session.get('isy_token') or request.cookies.get('isy_token')
+        
+        if not token:
+            return jsonify({
+                'success': False,
+                'error': 'Not authenticated',
+                'login_required': True
+            }), 401
+        
+        # Verify token is still valid
+        decoded = verify_isy_token(token)
+        if not decoded:
+            return jsonify({
+                'success': False,
+                'error': 'Token expired',
+                'login_required': True
+            }), 401
+        
+        # Get person_id from session
+        person_id = session.get('isy_person_id')
+        if not person_id:
+            # Try to fetch person info
+            person_info = fetch_isy_person_info(token)
+            if person_info and person_info.get('person_id'):
+                person_id = person_info['person_id']
+                session['isy_person_id'] = person_id
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Person ID not found'
+                }), 400
+        
+        # GraphQL query for archived messages
+        query = """
+        query getPersonalArchiveMessages($me: String!, $first: Int, $after: String, $last: Int, $before: String) {
+          messages(
+            context: {segment: "messagesUserArchive", iri: $me}
+            first: $first
+            after: $after
+            last: $last
+            before: $before
+          ) {
+            pageInfo {
+              hasNextPage
+              hasPreviousPage
+              startCursor
+              endCursor
+              __typename
+            }
+            totalCount
+            edges {
+              node {
+                ...MessageInboxFragment
+                __typename
+              }
+              __typename
+            }
+            __typename
+          }
+        }
+
+        fragment MessageInboxFragment on Message {
+          id
+          _id
+          calculatedExtendedTitleShort
+          subject
+          previewText
+          priority
+          status
+          visibleTo
+          iHaveReadIt
+          authLevel
+          modified
+          modifiedby
+          lastContentChange
+          primaryAuthor {
+            id
+            _id
+            role
+            person {
+              id
+              _id
+              firstname
+              lastname
+              __typename
+            }
+            __typename
+          }
+          me {
+            id
+            seenWhen
+            readWhen
+            __typename
+          }
+          __typename
+        }
+        """
+        
+        variables = {
+            'me': f'/people/{person_id}',
+            'first': 60,
+            'after': None
+        }
+        
+        response = requests.post(
+            'https://isy-api.ksr.ch/graphql',
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'Accept': '*/*',
+                'Origin': 'https://isy.ksr.ch',
+                'Referer': 'https://isy.ksr.ch/'
+            },
+            json={
+                'operationName': 'getPersonalArchiveMessages',
+                'query': query,
+                'variables': variables
+            },
+            timeout=15
+        )
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'API error: {response.status_code}'
+            }), response.status_code
+        
+        data = response.json()
+        print(f"Archive Messages Response: {data}")
+        
+        # Parse messages from response
+        messages = []
+        total_count = 0
+        if 'data' in data and 'messages' in data['data']:
+            edges = data['data']['messages'].get('edges', [])
+            total_count = data['data']['messages'].get('totalCount', 0)
+            
+            for edge in edges:
+                node = edge.get('node', {})
+                if not node:
+                    continue
+                
+                author = None
+                if node.get('primaryAuthor') and node['primaryAuthor'].get('person'):
+                    person = node['primaryAuthor']['person']
+                    author = f"{person.get('firstname', '')} {person.get('lastname', '')}".strip()
+                
+                me = node.get('me', {}) or {}
+                
+                messages.append({
+                    'id': node.get('id'),
+                    '_id': node.get('_id'),
+                    'title': node.get('calculatedExtendedTitleShort', node.get('subject', 'Kein Titel')),
+                    'previewText': node.get('previewText', ''),
+                    'priority': node.get('priority', 'NORMAL'),
+                    'status': node.get('status'),
+                    'author': author,
+                    'isRead': node.get('iHaveReadIt', False),
+                    'meId': me.get('id'),
+                    'readWhen': me.get('readWhen')
+                })
+        
+        return jsonify({
+            'success': True,
+            'messages': messages,
+            'totalCount': total_count
+        })
+        
+    except Exception as e:
+        print(f"Error fetching archive messages: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/isy/archive-message', methods=['POST'])
+def isy_archive_message():
+    """
+    Archive or unarchive a message using setArchive mutation
+    """
+    try:
+        # Get token from session or cookie
+        token = session.get('isy_token') or request.cookies.get('isy_token')
+        
+        if not token:
+            return jsonify({
+                'success': False,
+                'error': 'Not authenticated',
+                'login_required': True
+            }), 401
+        
+        # Verify token is still valid
+        decoded = verify_isy_token(token)
+        if not decoded:
+            return jsonify({
+                'success': False,
+                'error': 'Token expired',
+                'login_required': True
+            }), 401
+        
+        # Get request data
+        data = request.get_json()
+        recipient_id = data.get('recipientId')  # e.g., "/message_recipients/11270998"
+        archive_action = data.get('archive', 'Archive')  # "Archive" or "Inbox"
+        
+        if not recipient_id:
+            return jsonify({
+                'success': False,
+                'error': 'recipientId is required'
+            }), 400
+        
+        # GraphQL mutation for archiving
+        mutation = """
+        mutation setArchive($input: setArchiveMessageRecipientInput!) {
+          setArchiveMessageRecipient(input: $input) {
+            messageRecipient {
+              id
+              _id
+              archive
+              wasJustUpdated
+              __typename
+            }
+            __typename
+          }
+        }
+        """
+        
+        variables = {
+            'input': {
+                'archive': archive_action,
+                'id': recipient_id
+            }
+        }
+        
+        response = requests.post(
+            'https://isy-api.ksr.ch/graphql',
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'Accept': '*/*',
+                'Origin': 'https://isy.ksr.ch',
+                'Referer': 'https://isy.ksr.ch/'
+            },
+            json={
+                'operationName': 'setArchive',
+                'query': mutation,
+                'variables': variables
+            },
+            timeout=15
+        )
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'API error: {response.status_code}'
+            }), response.status_code
+        
+        result = response.json()
+        print(f"Archive Message Response: {result}")
+        
+        if 'data' in result and 'setArchiveMessageRecipient' in result['data']:
+            return jsonify({
+                'success': True,
+                'result': result['data']['setArchiveMessageRecipient']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to archive message',
+                'details': result
+            }), 400
+        
+    except Exception as e:
+        print(f"Error archiving message: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
 @app.route('/api/timetable')
 def get_timetable():
     """API endpoint to get timetable data with caching for performance"""

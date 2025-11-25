@@ -3311,3 +3311,106 @@ body {
         padding: 16px;
     }
 }
+
+/* ========================================
+   ISY Messages Header & Archive Toggle
+   ======================================== */
+
+.isy-header-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.isy-header-row h2 {
+    margin: 0;
+}
+
+.msg-view-toggle {
+    display: flex;
+    gap: 4px;
+    background: rgba(15, 23, 42, 0.6);
+    padding: 4px;
+    border-radius: 8px;
+}
+
+.msg-view-btn {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px 10px;
+    background: transparent;
+    border: none;
+    border-radius: 6px;
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: all 0.2s ease;
+}
+
+.msg-view-btn:hover {
+    background: rgba(99, 102, 241, 0.2);
+    color: var(--text-primary);
+}
+
+.msg-view-btn.active {
+    background: rgba(99, 102, 241, 0.3);
+    color: var(--primary-color);
+}
+
+.msg-view-btn svg {
+    flex-shrink: 0;
+}
+
+/* Archive button on message items */
+.archive-btn {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    border-radius: 4px;
+    padding: 4px 6px;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: all 0.2s ease;
+    opacity: 0;
+    flex-shrink: 0;
+}
+
+.dashboard-message-item:hover .archive-btn {
+    opacity: 1;
+}
+
+.archive-btn:hover {
+    background: rgba(99, 102, 241, 0.3);
+    color: var(--primary-color);
+}
+
+.dashboard-msg-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: 8px;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+    .isy-header-row {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+    
+    .msg-view-toggle {
+        width: 100%;
+    }
+    
+    .msg-view-btn {
+        flex: 1;
+        justify-content: center;
+    }
+    
+    .archive-btn {
+        opacity: 1;
+    }
+}

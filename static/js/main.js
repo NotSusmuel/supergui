@@ -926,10 +926,18 @@ async function checkISYStatus() {
         updateISYButton();
         
         if (isyAuthenticated) {
+            // Show the message view toggle
+            const toggleDiv = document.getElementById('msgViewToggle');
+            if (toggleDiv) toggleDiv.style.display = 'flex';
+            
             // Load messages if authenticated
             loadISYMessages();
             loadISYDashboardMessages();
         } else {
+            // Hide the message view toggle
+            const toggleDiv = document.getElementById('msgViewToggle');
+            if (toggleDiv) toggleDiv.style.display = 'none';
+            
             // Clear dashboard messages if not authenticated
             const dashboardDiv = document.getElementById('isyDashboardMessages');
             if (dashboardDiv) {
@@ -1107,13 +1115,6 @@ async function loadISYMessages() {
                     const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msg.priority] || 'Normal';
                     const priorityClass = ['low', 'normal', 'high', 'urgent'][msg.priority] || 'normal';
                     
-                    let dateInfo = '';
-                    if (msg.dtDue) {
-                        dateInfo = `<div class="isy-message-date">📅 Fällig: ${new Date(msg.dtDue).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>`;
-                    } else if (msg.visibleTo) {
-                        dateInfo = `<div class="isy-message-date">📅 Bis: ${new Date(msg.visibleTo).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>`;
-                    }
-                    
                     const statusBadges = [];
                     if (msg.completed) {
                         statusBadges.push('<span class="isy-badge completed">✅ Erledigt</span>');
@@ -1133,7 +1134,6 @@ async function loadISYMessages() {
                                     <span class="priority-dot"></span>${priorityText}
                                 </div>
                             </div>
-                            ${dateInfo}
                             ${msg.body ? `<div class="isy-message-body">${msg.body.substring(0, 200)}${msg.body.length > 200 ? '...' : ''}</div>` : ''}
                             ${statusBadges.length > 0 ? `<div class="isy-message-badges">${statusBadges.join('')}</div>` : ''}
                         </div>
@@ -1171,6 +1171,8 @@ async function loadISYMessages() {
 }
 
 // Load dashboard messages (full archive) for the 5th column
+let currentMessageView = 'inbox'; // 'inbox' or 'archive'
+
 async function loadISYDashboardMessages() {
     if (!isyAuthenticated) return;
     
@@ -1180,40 +1182,47 @@ async function loadISYDashboardMessages() {
     dashboardDiv.innerHTML = '<p class="loading">Lade Mitteilungen...</p>';
     
     try {
-        const response = await fetch('/api/isy/dashboard-messages');
+        const endpoint = currentMessageView === 'archive' ? '/api/isy/archive-messages' : '/api/isy/dashboard-messages';
+        const response = await fetch(endpoint);
         const data = await response.json();
         
-        console.log('ISY Dashboard Messages Response:', data);
+        console.log(`ISY ${currentMessageView} Messages Response:`, data);
         
-        if (response.ok) {
+        if (response.ok && data.success !== false) {
             if (data.messages && data.messages.length > 0) {
                 // Show only first 10 messages for dashboard
                 const displayMessages = data.messages.slice(0, 10);
                 
                 dashboardDiv.innerHTML = displayMessages.map(msg => {
-                    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msg.priority] || 'Normal';
-                    const priorityClass = ['low', 'normal', 'high', 'urgent'][msg.priority] || 'normal';
+                    const priorityMap = { 'LOW': 0, 'NORMAL': 1, 'HIGH': 2, 'URGENT': 3 };
+                    const priorityIndex = typeof msg.priority === 'string' ? (priorityMap[msg.priority] || 1) : (msg.priority || 1);
+                    const priorityClass = ['low', 'normal', 'high', 'urgent'][priorityIndex] || 'normal';
                     
-                    let dateInfo = '';
-                    if (msg.visibleTo) {
-                        const date = new Date(msg.visibleTo);
-                        dateInfo = `<div class="dashboard-msg-date">📅 ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</div>`;
-                    }
-                    
-                    const readIndicator = msg.iHaveReadIt ? '' : '<span class="unread-dot">●</span>';
+                    const readIndicator = msg.isRead || msg.iHaveReadIt ? '' : '<span class="unread-dot">●</span>';
+                    const meId = msg.meId || (msg.me && msg.me.id) || '';
                     
                     return `
-                        <div class="dashboard-message-item priority-${priorityClass}" data-message-id="${msg.id}" data-message-full='${JSON.stringify(msg).replace(/'/g, "&#39;")}' style="cursor: pointer;">
+                        <div class="dashboard-message-item priority-${priorityClass}" 
+                             data-message-id="${msg.id}" 
+                             data-me-id="${meId}"
+                             data-message-full='${JSON.stringify(msg).replace(/'/g, "&#39;")}' 
+                             style="cursor: pointer;">
                             <div class="dashboard-msg-header">
                                 <div class="dashboard-msg-title">
                                     ${readIndicator}
                                     ${msg.title}
                                 </div>
-                                <span class="dashboard-priority-dot ${priorityClass}"></span>
+                                <button class="archive-btn" onclick="event.stopPropagation(); toggleArchiveMessage('${meId}', '${currentMessageView === 'archive' ? 'Inbox' : 'Archive'}')" title="${currentMessageView === 'archive' ? 'Wiederherstellen' : 'Archivieren'}">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                        ${currentMessageView === 'archive' 
+                                            ? '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>'
+                                            : '<path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/>'
+                                        }
+                                    </svg>
+                                </button>
                             </div>
                             ${msg.author ? `<div class="dashboard-msg-author">👤 ${msg.author}</div>` : ''}
                             ${msg.previewText ? `<div class="dashboard-msg-preview">${msg.previewText.substring(0, 100)}${msg.previewText.length > 100 ? '...' : ''}</div>` : ''}
-                            ${dateInfo}
                         </div>
                     `;
                 }).join('');
@@ -1226,7 +1235,7 @@ async function loadISYDashboardMessages() {
                     });
                 });
             } else {
-                dashboardDiv.innerHTML = '<p class="no-data">Keine Mitteilungen vorhanden</p>';
+                dashboardDiv.innerHTML = `<p class="no-data">${currentMessageView === 'archive' ? 'Keine archivierten Mitteilungen' : 'Keine Mitteilungen vorhanden'}</p>`;
             }
         } else {
             // Check if token expired
@@ -1251,6 +1260,55 @@ async function loadISYDashboardMessages() {
     } catch (error) {
         console.error('Error loading ISY dashboard messages:', error);
         dashboardDiv.innerHTML = `<p class="error-message">Verbindungsfehler: ${error.message}</p>`;
+    }
+}
+
+// Toggle between inbox and archive view
+function toggleMessageView(view) {
+    currentMessageView = view;
+    
+    // Update toggle buttons
+    document.querySelectorAll('.msg-view-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    const activeBtn = document.querySelector(`.msg-view-btn[data-view="${view}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+    
+    // Reload messages
+    loadISYDashboardMessages();
+}
+
+// Archive or unarchive a message
+async function toggleArchiveMessage(meId, action) {
+    if (!meId) {
+        console.error('No meId provided for archive action');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/isy/archive-message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                recipientId: meId,
+                archive: action
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Reload messages to reflect the change
+            loadISYDashboardMessages();
+        } else {
+            console.error('Failed to archive message:', data.error);
+            alert('Fehler beim Archivieren: ' + (data.error || 'Unbekannter Fehler'));
+        }
+    } catch (error) {
+        console.error('Error archiving message:', error);
+        alert('Verbindungsfehler beim Archivieren');
     }
 }
 
