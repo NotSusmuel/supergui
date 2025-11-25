@@ -930,8 +930,7 @@ async function checkISYStatus() {
             const toggleDiv = document.getElementById('msgViewToggle');
             if (toggleDiv) toggleDiv.style.display = 'flex';
             
-            // Load messages if authenticated
-            loadISYMessages();
+            // Load dashboard messages if authenticated
             loadISYDashboardMessages();
         } else {
             // Hide the message view toggle
@@ -1053,8 +1052,15 @@ async function submitISYLogin() {
             updateISYButton();
             updateISYLoginUI();
             
-            // Load messages
-            loadISYMessages();
+            // Show the message view toggle
+            const toggleDiv = document.getElementById('msgViewToggle');
+            if (toggleDiv) toggleDiv.style.display = 'flex';
+            
+            // Load dashboard messages (4th column)
+            loadISYDashboardMessages();
+            
+            // Close the login modal
+            closeISYLogin();
             
             showToast('ISY Login', 'Erfolgreich angemeldet!');
         } else {
@@ -1094,79 +1100,6 @@ async function submitISYLogout() {
         }
     } catch (error) {
         console.error('ISY logout error:', error);
-    }
-}
-
-async function loadISYMessages() {
-    if (!isyAuthenticated) return;
-    
-    const messagesList = document.getElementById('isyMessagesList');
-    messagesList.innerHTML = '<p class="loading">Lade Mitteilungen...</p>';
-    
-    try {
-        const response = await fetch('/api/isy/messages');
-        const data = await response.json();
-        
-        console.log('ISY Messages Response:', data);
-        
-        if (response.ok) {
-            if (data.messages && data.messages.length > 0) {
-                messagesList.innerHTML = data.messages.map(msg => {
-                    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msg.priority] || 'Normal';
-                    const priorityClass = ['low', 'normal', 'high', 'urgent'][msg.priority] || 'normal';
-                    
-                    const statusBadges = [];
-                    if (msg.completed) {
-                        statusBadges.push('<span class="isy-badge completed">✅ Erledigt</span>');
-                    }
-                    if (msg.readWhen) {
-                        statusBadges.push('<span class="isy-badge read">👁️ Gelesen</span>');
-                    }
-                    if (msg.archivedWhen) {
-                        statusBadges.push('<span class="isy-badge archived">📦 Archiviert</span>');
-                    }
-                    
-                    return `
-                        <div class="isy-message-item priority-${priorityClass}" data-message-id="${msg.id}">
-                            <div class="isy-message-header">
-                                <div class="isy-message-title">${msg.title || 'Keine Titel'}</div>
-                                <div class="isy-message-priority priority-${priorityClass}">
-                                    <span class="priority-dot"></span>${priorityText}
-                                </div>
-                            </div>
-                            ${msg.body ? `<div class="isy-message-body">${msg.body.substring(0, 200)}${msg.body.length > 200 ? '...' : ''}</div>` : ''}
-                            ${statusBadges.length > 0 ? `<div class="isy-message-badges">${statusBadges.join('')}</div>` : ''}
-                        </div>
-                    `;
-                }).join('');
-            } else {
-                messagesList.innerHTML = '<p class="no-data">Keine Mitteilungen vorhanden</p>';
-            }
-        } else {
-            // Check if token expired
-            if (data.login_required) {
-                // Token expired - clear auth state and prompt re-login
-                isyAuthenticated = false;
-                localStorage.removeItem('isyAuthenticated');
-                messagesList.innerHTML = '<p class="error-message">Sitzung abgelaufen - bitte erneut anmelden</p>';
-                
-                // Update UI to show login button
-                const isyButton = document.getElementById('isyLoginBtn');
-                if (isyButton) {
-                    isyButton.textContent = translations[currentLanguage].isyLogin;
-                    isyButton.classList.remove('authenticated');
-                }
-            } else {
-                // Show error details for debugging
-                const errorMsg = data.error || 'Fehler beim Laden der Mitteilungen';
-                const errorDetail = data.message ? `<br><small>${data.message}</small>` : '';
-                messagesList.innerHTML = `<p class="error-message">${errorMsg}${errorDetail}</p>`;
-            }
-            console.error('ISY messages error:', data);
-        }
-    } catch (error) {
-        console.error('Error loading ISY messages:', error);
-        messagesList.innerHTML = `<p class="error-message">Verbindungsfehler: ${error.message}</p>`;
     }
 }
 
