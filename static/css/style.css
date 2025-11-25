@@ -1370,18 +1370,27 @@ body::before {
     padding-bottom: 4px !important;
 }
 
-/* Make current lesson super compact */
+/* Make current lesson super compact - same styling as next lesson */
 .current-notebook.compact {
     padding: 6px !important;
     font-size: 0.75rem !important;
 }
 
-.current-notebook.compact .current-subject {
-    font-size: 1rem !important;
+.current-notebook.compact .lesson-title {
+    font-size: 0.85rem !important;
+    margin-bottom: 4px !important;
 }
 
-.current-notebook.compact .current-subject-small {
+.current-notebook.compact .lesson-location {
+    padding: 2px 6px !important;
     font-size: 0.7rem !important;
+    margin-bottom: 4px !important;
+}
+
+.current-notebook.compact .lesson-countdown {
+    font-size: 0.75rem !important;
+    padding: 4px 8px !important;
+    margin-top: 4px !important;
 }
 
 .current-notebook.compact .notebook-btn {
@@ -1391,6 +1400,11 @@ body::before {
 }
 
 .current-notebook.compact svg {
+    width: 10px !important;
+    height: 10px !important;
+}
+
+.current-notebook.compact .notebook-btn svg {
     width: 16px !important;
     height: 16px !important;
 }
