@@ -553,11 +553,8 @@ def parse_csv_timetable(csv_path):
                     # Get full subject name
                     subject_name = get_subject_name(subject_abbr)
                     
-                    # Build display name: "Subject (Room)" or just "Subject" if no room
-                    if location:
-                        subject_display = f"{subject_name} ({location})"
-                    else:
-                        subject_display = subject_name
+                    # Use just the subject name without location (location is shown separately)
+                    subject_display = subject_name
                 
                 # Check if it's an exam:
                 # - Look for "(Prüfung)" anywhere in SUMMARY or DESCRIPTION
