@@ -1795,7 +1795,7 @@ body {
 }
 
 .current-lesson-card {
-    border-color: rgba(16, 185, 129, 0.4);
+    border-color: rgba(99, 102, 241, 0.4);
     animation: glowBox 2s ease-in-out infinite;
 }
 
@@ -1933,8 +1933,8 @@ body {
 
 .current-lesson-card:hover {
     box-shadow: 
-        0 8px 24px rgba(16, 185, 129, 0.6),
-        0 0 30px rgba(16, 185, 129, 0.3);
+        0 8px 24px rgba(99, 102, 241, 0.6),
+        0 0 30px rgba(99, 102, 241, 0.3);
 }
 
 .next-lesson-card:hover {

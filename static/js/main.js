@@ -283,7 +283,7 @@ function updateCurrentNotebook(currentLesson) {
     if (!currentLesson) {
         // No current lesson - use same card style as next lesson
         notebookDiv.innerHTML = `
-            <div class="lesson-card current-lesson-card">
+            <div class="lesson-card next-lesson-card">
                 <div class="lesson-status">Gerade kein Unterricht</div>
             </div>
         `;
@@ -310,33 +310,23 @@ function updateCurrentNotebook(currentLesson) {
             ${location}
         </div>` : '';
     
-    if (!onenoteLink) {
-        // No notebook for this subject - card style
-        notebookDiv.innerHTML = `
-            <div class="lesson-card current-lesson-card">
-                <div class="lesson-title">${subject}</div>
-                ${locationHtml}
-                <div class="lesson-countdown" id="currentLessonEndCountdown">Berechne...</div>
-                <p class="no-notebook-text">Fach hat kein Notizbuch</p>
-            </div>
-        `;
-        // Trigger countdown update
-        updateCountdown();
-        return;
-    }
+    // Build notebook button HTML if link exists
+    const notebookBtnHtml = onenoteLink ? `
+        <button class="notebook-btn" onclick="window.location.href='${onenoteLink}'">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M22 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h17c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 17V7h3v10H7zm12 0h-9V7h9v10z"/>
+            </svg>
+            Notizbuch öffnen
+        </button>
+    ` : '';
     
-    // Has a notebook link - card style
+    // Use same layout as next lesson card
     notebookDiv.innerHTML = `
-        <div class="lesson-card current-lesson-card">
-            <div class="lesson-title">${subject}</div>
+        <div class="lesson-card next-lesson-card">
+            <div class="lesson-title">${currentLesson.summary}</div>
             ${locationHtml}
             <div class="lesson-countdown" id="currentLessonEndCountdown">Berechne...</div>
-            <button class="notebook-btn" onclick="window.location.href='${onenoteLink}'">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M22 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h17c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 17V7h3v10H7zm12 0h-9V7h9v10z"/>
-                </svg>
-                Notizbuch öffnen
-            </button>
+            ${notebookBtnHtml}
         </div>
     `;
     // Trigger countdown update
