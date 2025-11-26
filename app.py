@@ -70,6 +70,7 @@ _timetable_cache = {
 CACHE_DURATION = 300  # 5 minutes cache
 
 # Subject abbreviation mapping
+# Subjects are matched by prefix (e.g., "BIO1" matches "BIO" -> "Biologie")
 SUBJECT_MAPPING = {
     'IF': 'Informatik',
     'F': 'Französisch',
@@ -77,15 +78,14 @@ SUBJECT_MAPPING = {
     'M': 'Mathematik',
     'D': 'Deutsch',
     'WR': 'Wirtschaft und Recht',
-    'SP05': 'Sport',
-    'BG08': 'Bildnerisches Gestalten',
+    'SP': 'Sport',
+    'BG': 'Bildnerisches Gestalten',
     'E': 'Englisch',
     'GG': 'Geografie',
     'BIO': 'Biologie',
-    'BIO1': 'Biologie',
     'G': 'Geschichte',
     'CH': 'Chemie',
-    'CH1': 'Chemie',
+    'KS': 'Klassenstunde',
     # Legacy mappings for sample data
     'MA': 'Mathematik',
     'DE': 'Deutsch',
@@ -93,6 +93,9 @@ SUBJECT_MAPPING = {
     'PH': 'Physik',
     'IN': 'Informatik'
 }
+
+# Pre-computed sorted prefixes for efficient prefix matching (longest first)
+_SUBJECT_PREFIXES_SORTED = sorted(SUBJECT_MAPPING.keys(), key=len, reverse=True)
 
 # OneNote notebook links for each subject
 # IMPORTANT: Replace these with YOUR OWN OneNote notebook URLs
@@ -106,12 +109,23 @@ SUBJECT_MAPPING = {
 # 'Subject Name': 'onenote:https://YOUR-SCHOOL.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
 #
 ONENOTE_LINKS = {
-    # Add your subject OneNote links here
-    # Example:
-    # 'Französisch': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
-    # 'Mathematik': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
-    # 'Deutsch': 'onenote:https://your-school.sharepoint.com/sites/YOUR-CLASS/SiteAssets/YOUR-NOTEBOOK',
-    # Add more subjects as needed...
+    # OneNote notebook links for each subject
+    # Replace the placeholder URLs below with your actual OneNote notebook URLs
+    'Mathematik': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-math}&action=edit',
+    'Deutsch': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-deutsch}&action=edit',
+    'Französisch': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-franz}&action=edit',
+    'Englisch': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-english}&action=edit',
+    'Biologie': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-bio}&action=edit',
+    'Chemie': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-chemie}&action=edit',
+    'Physik': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-physik}&action=edit',
+    'Informatik': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-info}&action=edit',
+    'Geschichte': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-geschichte}&action=edit',
+    'Geografie': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-geografie}&action=edit',
+    'Wirtschaft und Recht': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-wr}&action=edit',
+    'Musik': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-musik}&action=edit',
+    'Sport': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-sport}&action=edit',
+    'Bildnerisches Gestalten': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-bg}&action=edit',
+    'Klassenstunde': 'onenote:https://edubs.sharepoint.com/sites/FS-KSR-1Mf-2024/_layouts/15/Doc.aspx?sourcedoc={placeholder-ks}&action=edit',
 }
 
 # ISY Authentication Functions
@@ -393,8 +407,22 @@ def fetch_isy_messages(token, person_id):
         return None
 
 def get_subject_name(abbreviation):
-    """Convert subject abbreviation to full name"""
-    return SUBJECT_MAPPING.get(abbreviation, abbreviation)
+    """Convert subject abbreviation to full name using prefix matching.
+    
+    Subjects like 'BIO1', 'CH1', 'SP05' will match 'BIO', 'CH', 'SP' respectively.
+    """
+    # First try exact match
+    if abbreviation in SUBJECT_MAPPING:
+        return SUBJECT_MAPPING[abbreviation]
+    
+    # Try prefix matching - find the longest matching prefix
+    # Uses pre-computed sorted list for efficiency
+    for prefix in _SUBJECT_PREFIXES_SORTED:
+        if abbreviation.startswith(prefix):
+            return SUBJECT_MAPPING[prefix]
+    
+    # Return original if no match found
+    return abbreviation
 
 
 def fetch_and_convert_ics_to_csv(url):
@@ -525,11 +553,8 @@ def parse_csv_timetable(csv_path):
                     # Get full subject name
                     subject_name = get_subject_name(subject_abbr)
                     
-                    # Build display name: "Subject (Room)" or just "Subject" if no room
-                    if location:
-                        subject_display = f"{subject_name} ({location})"
-                    else:
-                        subject_display = subject_name
+                    # Use just the subject name without location (location is shown separately)
+                    subject_display = subject_name
                 
                 # Check if it's an exam:
                 # - Look for "(Prüfung)" anywhere in SUMMARY or DESCRIPTION
@@ -986,8 +1011,9 @@ def isy_dashboard_messages():
                     'modified': node.get('modified'),
                     'lastContentChange': node.get('lastContentChange'),
                     'author': author_name,
-                    'seenWhen': me.get('seenWhen'),
-                    'readWhen': me.get('readWhen')
+                    'meId': me.get('id') if me else None,
+                    'seenWhen': me.get('seenWhen') if me else None,
+                    'readWhen': me.get('readWhen') if me else None
                 })
         
         print(f"Found {len(messages)} dashboard messages")
@@ -1000,6 +1026,465 @@ def isy_dashboard_messages():
         return jsonify({
             'error': 'Internal server error',
             'message': str(e)
+        }), 500
+
+@app.route('/api/isy/message/<int:message_id>')
+def isy_message_detail(message_id):
+    """
+    Fetch full message details using getMessageDetail GraphQL query
+    Returns complete message with body, author, attachments, etc.
+    """
+    try:
+        # Get token from session or cookie
+        token = session.get('isy_token') or request.cookies.get('isy_token')
+        
+        if not token:
+            return jsonify({
+                'success': False,
+                'error': 'Not authenticated',
+                'login_required': True
+            }), 401
+        
+        # Verify token is still valid
+        decoded = verify_isy_token(token)
+        if not decoded:
+            return jsonify({
+                'success': False,
+                'error': 'Token expired',
+                'login_required': True
+            }), 401
+        
+        # GraphQL query for message detail (from ISY API)
+        query = """
+        query getMessageDetail($id: ID!, $authLevel: Int, $outputContext: String) {
+          message: exMessage(id: $id, outputContext: $outputContext) {
+            id
+            _id
+            priority
+            status
+            visibleFrom
+            visibleTo
+            authLevel
+            public
+            private
+            dtFrom
+            dtTo
+            dtDue
+            shownIn
+            calculatedTitleShort
+            calculatedExtendedTitle
+            title
+            subject
+            body
+            form
+            created
+            createdby
+            modified
+            modifiedby
+            iAmAuthor
+            iAmOwner
+            iAmRecipient
+            iAmAddressed
+            iCanEdit
+            isAppointment
+            isTodo
+            iHaveReadIt
+            showOnScreens
+            repliesAllowed
+            lastContentChange
+            primaryAuthor {
+              id
+              _id
+              role
+              shownIn
+              person {
+                id
+                _id
+                firstname
+                lastname
+                primaryGroup {
+                  id
+                  _id
+                  descShort
+                  description
+                  __typename
+                }
+                __typename
+              }
+              __typename
+            }
+            attachments(first: 200, order: {position: "asc"}, showDeleted: false, authLevelBitFilter: $authLevel) {
+              edges {
+                node {
+                  id
+                  _id
+                  position
+                  authLevel
+                  document {
+                    id
+                    _id
+                    smallThumbUrl
+                    internalfile
+                    filename
+                    description
+                    mimetype
+                    __typename
+                  }
+                  __typename
+                }
+                __typename
+              }
+              __typename
+            }
+            __typename
+          }
+        }
+        """
+        
+        variables = {
+            'id': f'/messages/{message_id}',
+            'authLevel': 5,
+            'outputContext': 'messages:detail'
+        }
+        
+        response = requests.post(
+            'https://isy-api.ksr.ch/graphql',
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'Accept': '*/*',
+                'Origin': 'https://isy.ksr.ch',
+                'Referer': 'https://isy.ksr.ch/'
+            },
+            json={
+                'operationName': 'getMessageDetail',
+                'query': query,
+                'variables': variables
+            },
+            timeout=15
+        )
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'API error: {response.status_code}'
+            }), response.status_code
+        
+        data = response.json()
+        print(f"Message Detail Response for {message_id}: {data}")
+        
+        if 'data' in data and 'message' in data['data'] and data['data']['message']:
+            msg = data['data']['message']
+            return jsonify({
+                'success': True,
+                'message': msg
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Message not found'
+            }), 404
+            
+    except Exception as e:
+        print(f"Error fetching message detail: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/isy/archive-messages')
+def isy_archive_messages():
+    """
+    Fetch archived messages using getPersonalArchiveMessages GraphQL query
+    """
+    try:
+        # Get token from session or cookie
+        token = session.get('isy_token') or request.cookies.get('isy_token')
+        
+        if not token:
+            return jsonify({
+                'success': False,
+                'error': 'Not authenticated',
+                'login_required': True
+            }), 401
+        
+        # Verify token is still valid
+        decoded = verify_isy_token(token)
+        if not decoded:
+            return jsonify({
+                'success': False,
+                'error': 'Token expired',
+                'login_required': True
+            }), 401
+        
+        # Get person_id from session
+        person_id = session.get('isy_person_id')
+        if not person_id:
+            # Try to fetch person info
+            person_id = get_isy_person_id(token)
+            if person_id:
+                session['isy_person_id'] = person_id
+            else:
+                return jsonify({
+                    'success': False,
+                    'error': 'Person ID not found'
+                }), 400
+        
+        # GraphQL query for archived messages
+        query = """
+        query getPersonalArchiveMessages($me: String!, $first: Int, $after: String, $last: Int, $before: String) {
+          messages(
+            context: {segment: "messagesUserArchive", iri: $me}
+            first: $first
+            after: $after
+            last: $last
+            before: $before
+          ) {
+            pageInfo {
+              hasNextPage
+              hasPreviousPage
+              startCursor
+              endCursor
+              __typename
+            }
+            totalCount
+            edges {
+              node {
+                ...MessageInboxFragment
+                __typename
+              }
+              __typename
+            }
+            __typename
+          }
+        }
+
+        fragment MessageInboxFragment on Message {
+          id
+          _id
+          calculatedExtendedTitleShort
+          subject
+          previewText
+          priority
+          status
+          visibleTo
+          iHaveReadIt
+          authLevel
+          modified
+          modifiedby
+          lastContentChange
+          primaryAuthor {
+            id
+            _id
+            role
+            person {
+              id
+              _id
+              firstname
+              lastname
+              __typename
+            }
+            __typename
+          }
+          me {
+            id
+            seenWhen
+            readWhen
+            __typename
+          }
+          __typename
+        }
+        """
+        
+        variables = {
+            'me': person_id if person_id.startswith('/people/') else f'/people/{person_id}',
+            'first': 60,
+            'after': None
+        }
+        
+        response = requests.post(
+            'https://isy-api.ksr.ch/graphql',
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'Accept': '*/*',
+                'Origin': 'https://isy.ksr.ch',
+                'Referer': 'https://isy.ksr.ch/'
+            },
+            json={
+                'operationName': 'getPersonalArchiveMessages',
+                'query': query,
+                'variables': variables
+            },
+            timeout=15
+        )
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'API error: {response.status_code}'
+            }), response.status_code
+        
+        data = response.json()
+        print(f"Archive Messages Response: {data}")
+        
+        # Parse messages from response
+        messages = []
+        total_count = 0
+        if 'data' in data and 'messages' in data['data']:
+            edges = data['data']['messages'].get('edges', [])
+            total_count = data['data']['messages'].get('totalCount', 0)
+            
+            for edge in edges:
+                node = edge.get('node', {})
+                if not node:
+                    continue
+                
+                author = None
+                if node.get('primaryAuthor') and node['primaryAuthor'].get('person'):
+                    person = node['primaryAuthor']['person']
+                    author = f"{person.get('firstname', '')} {person.get('lastname', '')}".strip()
+                
+                me = node.get('me', {}) or {}
+                
+                messages.append({
+                    'id': node.get('id'),
+                    '_id': node.get('_id'),
+                    'title': node.get('calculatedExtendedTitleShort', node.get('subject', 'Kein Titel')),
+                    'previewText': node.get('previewText', ''),
+                    'priority': node.get('priority', 'NORMAL'),
+                    'status': node.get('status'),
+                    'author': author,
+                    'isRead': node.get('iHaveReadIt', False),
+                    'meId': me.get('id'),
+                    'readWhen': me.get('readWhen')
+                })
+        
+        return jsonify({
+            'success': True,
+            'messages': messages,
+            'totalCount': total_count
+        })
+        
+    except Exception as e:
+        print(f"Error fetching archive messages: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+@app.route('/api/isy/archive-message', methods=['POST'])
+def isy_archive_message():
+    """
+    Archive or unarchive a message using setArchive mutation
+    """
+    try:
+        # Get token from session or cookie
+        token = session.get('isy_token') or request.cookies.get('isy_token')
+        
+        if not token:
+            return jsonify({
+                'success': False,
+                'error': 'Not authenticated',
+                'login_required': True
+            }), 401
+        
+        # Verify token is still valid
+        decoded = verify_isy_token(token)
+        if not decoded:
+            return jsonify({
+                'success': False,
+                'error': 'Token expired',
+                'login_required': True
+            }), 401
+        
+        # Get request data
+        data = request.get_json()
+        recipient_id = data.get('recipientId')  # e.g., "/message_recipients/11270998"
+        archive_action = data.get('archive', 'Archive')  # "Archive" to archive, "None" to unarchive
+        
+        # Convert "Inbox" to "None" for API compatibility (frontend might use "Inbox")
+        if archive_action == 'Inbox':
+            archive_action = 'None'
+        
+        if not recipient_id:
+            return jsonify({
+                'success': False,
+                'error': 'recipientId is required'
+            }), 400
+        
+        # GraphQL mutation for archiving
+        mutation = """
+        mutation setArchive($input: setArchiveMessageRecipientInput!) {
+          setArchiveMessageRecipient(input: $input) {
+            messageRecipient {
+              id
+              _id
+              archive
+              wasJustUpdated
+              __typename
+            }
+            __typename
+          }
+        }
+        """
+        
+        variables = {
+            'input': {
+                'archive': archive_action,
+                'id': recipient_id
+            }
+        }
+        
+        response = requests.post(
+            'https://isy-api.ksr.ch/graphql',
+            headers={
+                'Authorization': f'Bearer {token}',
+                'Content-Type': 'application/json',
+                'Accept': '*/*',
+                'Origin': 'https://isy.ksr.ch',
+                'Referer': 'https://isy.ksr.ch/'
+            },
+            json={
+                'operationName': 'setArchive',
+                'query': mutation,
+                'variables': variables
+            },
+            timeout=15
+        )
+        
+        if response.status_code != 200:
+            return jsonify({
+                'success': False,
+                'error': f'API error: {response.status_code}'
+            }), response.status_code
+        
+        result = response.json()
+        print(f"Archive Message Response: {result}")
+        
+        if 'data' in result and 'setArchiveMessageRecipient' in result['data']:
+            return jsonify({
+                'success': True,
+                'result': result['data']['setArchiveMessageRecipient']
+            })
+        else:
+            return jsonify({
+                'success': False,
+                'error': 'Failed to archive message',
+                'details': result
+            }), 400
+        
+    except Exception as e:
+        print(f"Error archiving message: {e}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({
+            'success': False,
+            'error': str(e)
         }), 500
 
 @app.route('/api/timetable')

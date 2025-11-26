@@ -323,3 +323,94 @@ Pull Requests sind willkommen! Für größere Änderungen öffnen Sie bitte zuer
 - [ ] Kalender-Synchronisation
 - [ ] Dunkelmodus-Toggle
 - [ ] Mehrsprachigkeit
+## Automatic Startup (System Service)
+
+### Windows (Task Scheduler)
+
+1. **Create a Batch Script** (`start_supergui.bat`):
+   ```batch
+   @echo off
+   cd /d "%~dp0"
+   python app.py
+   ```
+
+2. **Configure Task Scheduler**:
+   - Press `Win + R`, type `taskschd.msc`
+   - Create Basic Task: "SuperGUI Dashboard"
+   - Trigger: When I log on
+   - Action: Start program → Select your batch file
+
+### Linux (systemd)
+
+1. **Create service file** (`~/.config/systemd/user/supergui.service`):
+   ```ini
+   [Unit]
+   Description=SuperGUI Dashboard
+   After=network.target
+
+   [Service]
+   Type=simple
+   WorkingDirectory=/path/to/supergui
+   ExecStart=/usr/bin/python3 app.py
+   Restart=always
+   Environment="FLASK_ENV=production"
+
+   [Install]
+   WantedBy=default.target
+   ```
+
+2. **Enable and start**:
+   ```bash
+   systemctl --user enable supergui.service
+   systemctl --user start supergui.service
+   ```
+
+### macOS (LaunchAgent)
+
+1. **Create plist** (`~/Library/LaunchAgents/com.supergui.dashboard.plist`):
+   ```xml
+   <?xml version="1.0" encoding="UTF-8"?>
+   <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+   <plist version="1.0">
+   <dict>
+       <key>Label</key>
+       <string>com.supergui.dashboard</string>
+       <key>ProgramArguments</key>
+       <array>
+           <string>/usr/local/bin/python3</string>
+           <string>/path/to/supergui/app.py</string>
+       </array>
+       <key>WorkingDirectory</key>
+       <string>/path/to/supergui</string>
+       <key>RunAtLoad</key>
+       <true/>
+   </dict>
+   </plist>
+   ```
+
+2. **Load service**:
+   ```bash
+   launchctl load ~/Library/LaunchAgents/com.supergui.dashboard.plist
+   ```
+
+## Quick Configuration
+
+### Using config.py
+
+1. Copy template: `cp config.py.example config.py`
+2. Edit with your settings:
+   ```python
+   ICS_URL = 'https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/YOUR_ID/timetable.ics'
+   OPENWEATHER_API_KEY = 'your_api_key'
+   ```
+
+### Using .env
+
+1. Copy template: `cp .env.example .env`
+2. Edit with your settings:
+   ```env
+   ICS_URL=https://isy-api.ksr.ch/pagdDownloadTimeTableIcal/YOUR_ID/timetable.ics
+   OPENWEATHER_API_KEY=your_api_key
+   ```
+
+> ⚠️ **Never commit** `config.py` or `.env` files - they contain your personal credentials!

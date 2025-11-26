@@ -283,7 +283,7 @@ function updateCurrentNotebook(currentLesson) {
     if (!currentLesson) {
         // No current lesson - use same card style as next lesson
         notebookDiv.innerHTML = `
-            <div class="lesson-card current-lesson-card">
+            <div class="lesson-card next-lesson-card">
                 <div class="lesson-status">Gerade kein Unterricht</div>
             </div>
         `;
@@ -310,33 +310,23 @@ function updateCurrentNotebook(currentLesson) {
             ${location}
         </div>` : '';
     
-    if (!onenoteLink) {
-        // No notebook for this subject - card style
-        notebookDiv.innerHTML = `
-            <div class="lesson-card current-lesson-card">
-                <div class="lesson-title">${subject}</div>
-                ${locationHtml}
-                <div class="lesson-countdown" id="currentLessonEndCountdown">Berechne...</div>
-                <p class="no-notebook-text">Fach hat kein Notizbuch</p>
-            </div>
-        `;
-        // Trigger countdown update
-        updateCountdown();
-        return;
-    }
+    // Build notebook button HTML if link exists
+    const notebookBtnHtml = onenoteLink ? `
+        <button class="notebook-btn" onclick="window.location.href='${onenoteLink}'">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M22 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h17c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 17V7h3v10H7zm12 0h-9V7h9v10z"/>
+            </svg>
+            Notizbuch öffnen
+        </button>
+    ` : '';
     
-    // Has a notebook link - card style
+    // Use same layout as next lesson card
     notebookDiv.innerHTML = `
-        <div class="lesson-card current-lesson-card">
-            <div class="lesson-title">${subject}</div>
+        <div class="lesson-card next-lesson-card">
+            <div class="lesson-title">${currentLesson.summary}</div>
             ${locationHtml}
             <div class="lesson-countdown" id="currentLessonEndCountdown">Berechne...</div>
-            <button class="notebook-btn" onclick="window.location.href='${onenoteLink}'">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M22 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h17c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM7 17V7h3v10H7zm12 0h-9V7h9v10z"/>
-                </svg>
-                Notizbuch öffnen
-            </button>
+            ${notebookBtnHtml}
         </div>
     `;
     // Trigger countdown update
@@ -936,10 +926,17 @@ async function checkISYStatus() {
         updateISYButton();
         
         if (isyAuthenticated) {
-            // Load messages if authenticated
-            loadISYMessages();
+            // Show the message view toggle
+            const toggleDiv = document.getElementById('msgViewToggle');
+            if (toggleDiv) toggleDiv.style.display = 'flex';
+            
+            // Load dashboard messages if authenticated
             loadISYDashboardMessages();
         } else {
+            // Hide the message view toggle
+            const toggleDiv = document.getElementById('msgViewToggle');
+            if (toggleDiv) toggleDiv.style.display = 'none';
+            
             // Clear dashboard messages if not authenticated
             const dashboardDiv = document.getElementById('isyDashboardMessages');
             if (dashboardDiv) {
@@ -1055,8 +1052,15 @@ async function submitISYLogin() {
             updateISYButton();
             updateISYLoginUI();
             
-            // Load messages
-            loadISYMessages();
+            // Show the message view toggle
+            const toggleDiv = document.getElementById('msgViewToggle');
+            if (toggleDiv) toggleDiv.style.display = 'flex';
+            
+            // Load dashboard messages (4th column)
+            loadISYDashboardMessages();
+            
+            // Close the login modal
+            closeISYLogin();
             
             showToast('ISY Login', 'Erfolgreich angemeldet!');
         } else {
@@ -1099,88 +1103,9 @@ async function submitISYLogout() {
     }
 }
 
-async function loadISYMessages() {
-    if (!isyAuthenticated) return;
-    
-    const messagesList = document.getElementById('isyMessagesList');
-    messagesList.innerHTML = '<p class="loading">Lade Mitteilungen...</p>';
-    
-    try {
-        const response = await fetch('/api/isy/messages');
-        const data = await response.json();
-        
-        console.log('ISY Messages Response:', data);
-        
-        if (response.ok) {
-            if (data.messages && data.messages.length > 0) {
-                messagesList.innerHTML = data.messages.map(msg => {
-                    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msg.priority] || 'Normal';
-                    const priorityClass = ['low', 'normal', 'high', 'urgent'][msg.priority] || 'normal';
-                    
-                    let dateInfo = '';
-                    if (msg.dtDue) {
-                        dateInfo = `<div class="isy-message-date">📅 Fällig: ${new Date(msg.dtDue).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>`;
-                    } else if (msg.visibleTo) {
-                        dateInfo = `<div class="isy-message-date">📅 Bis: ${new Date(msg.visibleTo).toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}</div>`;
-                    }
-                    
-                    const statusBadges = [];
-                    if (msg.completed) {
-                        statusBadges.push('<span class="isy-badge completed">✅ Erledigt</span>');
-                    }
-                    if (msg.readWhen) {
-                        statusBadges.push('<span class="isy-badge read">👁️ Gelesen</span>');
-                    }
-                    if (msg.archivedWhen) {
-                        statusBadges.push('<span class="isy-badge archived">📦 Archiviert</span>');
-                    }
-                    
-                    return `
-                        <div class="isy-message-item priority-${priorityClass}" data-message-id="${msg.id}">
-                            <div class="isy-message-header">
-                                <div class="isy-message-title">${msg.title || 'Keine Titel'}</div>
-                                <div class="isy-message-priority priority-${priorityClass}">
-                                    <span class="priority-dot"></span>${priorityText}
-                                </div>
-                            </div>
-                            ${dateInfo}
-                            ${msg.body ? `<div class="isy-message-body">${msg.body.substring(0, 200)}${msg.body.length > 200 ? '...' : ''}</div>` : ''}
-                            ${statusBadges.length > 0 ? `<div class="isy-message-badges">${statusBadges.join('')}</div>` : ''}
-                        </div>
-                    `;
-                }).join('');
-            } else {
-                messagesList.innerHTML = '<p class="no-data">Keine Mitteilungen vorhanden</p>';
-            }
-        } else {
-            // Check if token expired
-            if (data.login_required) {
-                // Token expired - clear auth state and prompt re-login
-                isyAuthenticated = false;
-                localStorage.removeItem('isyAuthenticated');
-                messagesList.innerHTML = '<p class="error-message">Sitzung abgelaufen - bitte erneut anmelden</p>';
-                
-                // Update UI to show login button
-                const isyButton = document.getElementById('isyLoginBtn');
-                if (isyButton) {
-                    isyButton.textContent = translations[currentLanguage].isyLogin;
-                    isyButton.classList.remove('authenticated');
-                }
-            } else {
-                // Show error details for debugging
-                const errorMsg = data.error || 'Fehler beim Laden der Mitteilungen';
-                const errorDetail = data.message ? `<br><small>${data.message}</small>` : '';
-                messagesList.innerHTML = `<p class="error-message">${errorMsg}${errorDetail}</p>`;
-            }
-            console.error('ISY messages error:', data);
-        }
-    } catch (error) {
-        console.error('Error loading ISY messages:', error);
-        messagesList.innerHTML = `<p class="error-message">Verbindungsfehler: ${error.message}</p>`;
-    }
-}
-
 // Load dashboard messages (full archive) for the 5th column
+let currentMessageView = 'inbox'; // 'inbox' or 'archive'
+
 async function loadISYDashboardMessages() {
     if (!isyAuthenticated) return;
     
@@ -1190,40 +1115,47 @@ async function loadISYDashboardMessages() {
     dashboardDiv.innerHTML = '<p class="loading">Lade Mitteilungen...</p>';
     
     try {
-        const response = await fetch('/api/isy/dashboard-messages');
+        const endpoint = currentMessageView === 'archive' ? '/api/isy/archive-messages' : '/api/isy/dashboard-messages';
+        const response = await fetch(endpoint);
         const data = await response.json();
         
-        console.log('ISY Dashboard Messages Response:', data);
+        console.log(`ISY ${currentMessageView} Messages Response:`, data);
         
-        if (response.ok) {
+        if (response.ok && data.success !== false) {
             if (data.messages && data.messages.length > 0) {
                 // Show only first 10 messages for dashboard
                 const displayMessages = data.messages.slice(0, 10);
                 
                 dashboardDiv.innerHTML = displayMessages.map(msg => {
-                    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msg.priority] || 'Normal';
-                    const priorityClass = ['low', 'normal', 'high', 'urgent'][msg.priority] || 'normal';
+                    const priorityMap = { 'LOW': 0, 'NORMAL': 1, 'HIGH': 2, 'URGENT': 3 };
+                    const priorityIndex = typeof msg.priority === 'string' ? (priorityMap[msg.priority] || 1) : (msg.priority || 1);
+                    const priorityClass = ['low', 'normal', 'high', 'urgent'][priorityIndex] || 'normal';
                     
-                    let dateInfo = '';
-                    if (msg.visibleTo) {
-                        const date = new Date(msg.visibleTo);
-                        dateInfo = `<div class="dashboard-msg-date">📅 ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit' })}</div>`;
-                    }
-                    
-                    const readIndicator = msg.iHaveReadIt ? '' : '<span class="unread-dot">●</span>';
+                    const readIndicator = msg.isRead || msg.iHaveReadIt ? '' : '<span class="unread-dot">●</span>';
+                    const meId = msg.meId || (msg.me && msg.me.id) || '';
                     
                     return `
-                        <div class="dashboard-message-item priority-${priorityClass}" data-message-id="${msg.id}" data-message-full='${JSON.stringify(msg).replace(/'/g, "&#39;")}' style="cursor: pointer;">
+                        <div class="dashboard-message-item priority-${priorityClass}" 
+                             data-message-id="${msg.id}" 
+                             data-me-id="${meId}"
+                             data-message-full='${JSON.stringify(msg).replace(/'/g, "&#39;")}' 
+                             style="cursor: pointer;">
                             <div class="dashboard-msg-header">
                                 <div class="dashboard-msg-title">
                                     ${readIndicator}
                                     ${msg.title}
                                 </div>
-                                <span class="dashboard-priority-dot ${priorityClass}"></span>
+                                <button class="archive-btn" onclick="event.stopPropagation(); toggleArchiveMessage('${meId}', '${currentMessageView === 'archive' ? 'Inbox' : 'Archive'}')" title="${currentMessageView === 'archive' ? 'Wiederherstellen' : 'Archivieren'}">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                                        ${currentMessageView === 'archive' 
+                                            ? '<path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-5 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>'
+                                            : '<path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/>'
+                                        }
+                                    </svg>
+                                </button>
                             </div>
                             ${msg.author ? `<div class="dashboard-msg-author">👤 ${msg.author}</div>` : ''}
                             ${msg.previewText ? `<div class="dashboard-msg-preview">${msg.previewText.substring(0, 100)}${msg.previewText.length > 100 ? '...' : ''}</div>` : ''}
-                            ${dateInfo}
                         </div>
                     `;
                 }).join('');
@@ -1236,7 +1168,7 @@ async function loadISYDashboardMessages() {
                     });
                 });
             } else {
-                dashboardDiv.innerHTML = '<p class="no-data">Keine Mitteilungen vorhanden</p>';
+                dashboardDiv.innerHTML = `<p class="no-data">${currentMessageView === 'archive' ? 'Keine archivierten Mitteilungen' : 'Keine Mitteilungen vorhanden'}</p>`;
             }
         } else {
             // Check if token expired
@@ -1264,33 +1196,136 @@ async function loadISYDashboardMessages() {
     }
 }
 
+// Toggle between inbox and archive view
+function toggleMessageView(view) {
+    currentMessageView = view;
+    
+    // Update toggle buttons
+    document.querySelectorAll('.msg-view-btn').forEach(btn => {
+        btn.classList.remove('active');
+    });
+    const activeBtn = document.querySelector(`.msg-view-btn[data-view="${view}"]`);
+    if (activeBtn) activeBtn.classList.add('active');
+    
+    // Reload messages
+    loadISYDashboardMessages();
+}
+
+// Archive or unarchive a message
+async function toggleArchiveMessage(meId, action) {
+    if (!meId) {
+        console.error('No meId provided for archive action');
+        return;
+    }
+    
+    try {
+        const response = await fetch('/api/isy/archive-message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                recipientId: meId,
+                archive: action
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Reload messages to reflect the change
+            loadISYDashboardMessages();
+        } else {
+            console.error('Failed to archive message:', data.error);
+            alert('Fehler beim Archivieren: ' + (data.error || 'Unbekannter Fehler'));
+        }
+    } catch (error) {
+        console.error('Error archiving message:', error);
+        alert('Verbindungsfehler beim Archivieren');
+    }
+}
+
+// Archive message from the modal view
+async function archiveMessageFromModal(meId) {
+    if (!meId) {
+        console.error('No meId provided for archive action');
+        return;
+    }
+    
+    // Determine action based on current view
+    const archiveAction = currentMessageView === 'archive' ? 'Inbox' : 'Archive';
+    const actionText = currentMessageView === 'archive' ? 'wiederhergestellt' : 'archiviert';
+    
+    try {
+        const response = await fetch('/api/isy/archive-message', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                recipientId: meId,
+                archive: archiveAction
+            })
+        });
+        
+        const data = await response.json();
+        
+        if (data.success) {
+            // Close modal and reload messages based on current view
+            closeMessageModal();
+            if (currentMessageView === 'archive') {
+                loadISYArchiveMessages();
+            } else {
+                loadISYDashboardMessages();
+            }
+            alert(`Nachricht ${actionText}`);
+        } else {
+            console.error('Failed to archive message:', data.error);
+            alert('Fehler: ' + (data.error || 'Unbekannter Fehler'));
+        }
+    } catch (error) {
+        console.error('Error archiving message:', error);
+        alert('Verbindungsfehler');
+    }
+}
+
 // Show message modal with full details
 async function showMessageModal(msg) {
     const modal = document.getElementById('messageModal');
     if (!modal) return;
     
-    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msg.priority] || 'Normal';
-    const priorityClass = ['low', 'normal', 'high', 'urgent'][msg.priority] || 'normal';
+    const priorityMap = { 'LOW': 0, 'NORMAL': 1, 'HIGH': 2, 'URGENT': 3 };
+    const priorityIndex = typeof msg.priority === 'string' ? (priorityMap[msg.priority] || 1) : (msg.priority || 1);
+    const priorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][priorityIndex] || 'Normal';
+    const priorityClass = ['low', 'normal', 'high', 'urgent'][priorityIndex] || 'normal';
     
-    // Show loading state
+    // Show loading state with modern design
     modal.querySelector('.modal-content').innerHTML = `
-        <div class="message-modal-header priority-${priorityClass}">
-            <h2>${msg.title}</h2>
-            <button class="close-btn" onclick="closeMessageModal()">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                </svg>
-            </button>
-        </div>
-        <div class="message-modal-body">
-            <div class="loading">Lade Nachricht...</div>
+        <div class="message-detail-container">
+            <div class="message-detail-header priority-${priorityClass}">
+                <div class="message-header-content">
+                    <h2 class="message-detail-title">${msg.title}</h2>
+                </div>
+                <button class="message-close-btn" onclick="closeMessageModal()">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="message-detail-body">
+                <div class="message-loading">
+                    <div class="loading-spinner"></div>
+                    <span>Lade Nachricht...</span>
+                </div>
+            </div>
         </div>
     `;
     modal.style.display = 'flex';
     
     try {
         // Fetch full message details from API
-        const response = await fetch(`/api/isy/message/${msg.id.split('/')[2]}`, {
+        const messageId = msg.id ? msg.id.split('/')[2] : msg._id;
+        const response = await fetch(`/api/isy/message/${messageId}`, {
             method: 'GET',
             headers: {
                 'Content-Type': 'application/json'
@@ -1302,29 +1337,111 @@ async function showMessageModal(msg) {
         if (data.success && data.message) {
             const fullMsg = data.message;
             
-            let dateInfo = '';
-            if (fullMsg.visibleTo) {
-                const date = new Date(fullMsg.visibleTo);
-                dateInfo = `Sichtbar bis: ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
+            // Get priority from response
+            const msgPriority = fullMsg.priority || 'NORMAL';
+            const msgPriorityIndex = priorityMap[msgPriority] || 1;
+            const msgPriorityText = ['Niedrig', 'Normal', 'Hoch', 'Dringend'][msgPriorityIndex] || 'Normal';
+            const msgPriorityClass = ['low', 'normal', 'high', 'urgent'][msgPriorityIndex] || 'normal';
+            
+            // Build author info
+            let authorHtml = '';
+            if (fullMsg.primaryAuthor && fullMsg.primaryAuthor.person) {
+                const author = fullMsg.primaryAuthor.person;
+                const authorGroup = author.primaryGroup ? author.primaryGroup.descShort : '';
+                authorHtml = `
+                    <div class="message-author-card">
+                        <div class="author-avatar">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                            </svg>
+                        </div>
+                        <div class="author-info">
+                            <span class="author-name">${author.firstname} ${author.lastname}</span>
+                            ${authorGroup ? `<span class="author-group">${authorGroup}</span>` : ''}
+                        </div>
+                    </div>
+                `;
             }
             
-            const modalContent = `
-                <div class="message-modal-header priority-${priorityClass}">
-                    <h2>${fullMsg.calculatedExtendedTitle || fullMsg.title || msg.title}</h2>
-                    <button class="close-btn" onclick="closeMessageModal()">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="message-modal-body">
-                    <div class="message-meta">
-                        ${fullMsg.primaryAuthor && fullMsg.primaryAuthor.person ? `<div class="message-author">👤 <strong>${fullMsg.primaryAuthor.person.firstname} ${fullMsg.primaryAuthor.person.lastname}</strong></div>` : ''}
-                        ${dateInfo ? `<div class="message-date">📅 ${dateInfo}</div>` : ''}
-                        <div class="message-priority">Priorität: <span class="priority-badge ${priorityClass}">${priorityText}</span></div>
+            // Build attachments list
+            // Note: Attachments can't be directly linked as ISY uses UUIDs that aren't exposed in the API
+            // We'll show the attachment names and indicate they should be viewed in ISY
+            let attachmentsHtml = '';
+            if (fullMsg.attachments && fullMsg.attachments.edges && fullMsg.attachments.edges.length > 0) {
+                const attachmentItems = fullMsg.attachments.edges.map(edge => {
+                    const doc = edge.node.document;
+                    const iconClass = doc.mimetype.includes('pdf') ? 'pdf' : 
+                                     doc.mimetype.includes('image') ? 'image' : 'file';
+                    return `
+                        <div class="attachment-item ${iconClass}">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/>
+                            </svg>
+                            <span>${doc.filename}</span>
+                        </div>
+                    `;
+                }).join('');
+                
+                attachmentsHtml = `
+                    <div class="message-attachments">
+                        <div class="attachments-header">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M16.5 6v11.5c0 2.21-1.79 4-4 4s-4-1.79-4-4V5c0-1.38 1.12-2.5 2.5-2.5s2.5 1.12 2.5 2.5v10.5c0 .55-.45 1-1 1s-1-.45-1-1V6H10v9.5c0 1.38 1.12 2.5 2.5 2.5s2.5-1.12 2.5-2.5V5c0-2.21-1.79-4-4-4S7 2.79 7 5v12.5c0 3.04 2.46 5.5 5.5 5.5s5.5-2.46 5.5-5.5V6h-1.5z"/>
+                            </svg>
+                            <span>Anhänge (${fullMsg.attachments.edges.length})</span>
+                            <a href="https://isy.ksr.ch/messages/${fullMsg._id}" target="_blank" class="view-in-isy-btn">In ISY öffnen</a>
+                        </div>
+                        <div class="attachments-list">
+                            ${attachmentItems}
+                        </div>
                     </div>
-                    <div class="message-content">
-                        ${fullMsg.body || fullMsg.subject || msg.previewText || 'Kein Inhalt verfügbar'}
+                `;
+            }
+            
+            // Get the me.id for archiving from the message
+            const meId = fullMsg.me ? fullMsg.me.id : (msg.meId || '');
+            
+            // Build archive button
+            const archiveButtonText = currentMessageView === 'archive' ? 'Wiederherstellen' : 'Archivieren';
+            const archiveButtonHtml = meId ? `
+                <div class="message-actions">
+                    <button class="message-archive-btn" onclick="archiveMessageFromModal('${meId}')">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M20.54 5.23l-1.39-1.68C18.88 3.21 18.47 3 18 3H6c-.47 0-.88.21-1.16.55L3.46 5.23C3.17 5.57 3 6.02 3 6.5V19c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V6.5c0-.48-.17-.93-.46-1.27zM12 17.5L6.5 12H10v-2h4v2h3.5L12 17.5zM5.12 5l.81-1h12l.94 1H5.12z"/>
+                        </svg>
+                        ${archiveButtonText}
+                    </button>
+                    <a href="https://isy.ksr.ch/messages/${fullMsg._id}" target="_blank" class="message-open-isy-btn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 19H5V5h7V3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/>
+                        </svg>
+                        In ISY öffnen
+                    </a>
+                </div>
+            ` : '';
+            
+            const modalContent = `
+                <div class="message-detail-container">
+                    <div class="message-detail-header priority-${msgPriorityClass}">
+                        <div class="message-header-content">
+                            <span class="message-priority-badge ${msgPriorityClass}">${msgPriorityText}</span>
+                            <h2 class="message-detail-title">${fullMsg.calculatedExtendedTitle || fullMsg.title || msg.title}</h2>
+                        </div>
+                        <button class="message-close-btn" onclick="closeMessageModal()">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="message-detail-body">
+                        ${authorHtml}
+                        <div class="message-content-wrapper">
+                            <div class="message-body-content">
+                                ${fullMsg.body || fullMsg.subject || '<p>Kein Inhalt verfügbar</p>'}
+                            </div>
+                        </div>
+                        ${attachmentsHtml}
+                        ${archiveButtonHtml}
                     </div>
                 </div>
             `;
@@ -1335,30 +1452,44 @@ async function showMessageModal(msg) {
         }
     } catch (error) {
         console.error('Error loading full message:', error);
-        // Fallback to preview data
-        let dateInfo = '';
-        if (msg.visibleTo) {
-            const date = new Date(msg.visibleTo);
-            dateInfo = `Sichtbar bis: ${date.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' })}`;
-        }
-        
+        // Fallback to preview data with modern design
         const modalContent = `
-            <div class="message-modal-header priority-${priorityClass}">
-                <h2>${msg.title}</h2>
-                <button class="close-btn" onclick="closeMessageModal()">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                    </svg>
-                </button>
-            </div>
-            <div class="message-modal-body">
-                <div class="message-meta">
-                    ${msg.author ? `<div class="message-author">👤 <strong>${msg.author}</strong></div>` : ''}
-                    ${dateInfo ? `<div class="message-date">📅 ${dateInfo}</div>` : ''}
-                    <div class="message-priority">Priorität: <span class="priority-badge ${priorityClass}">${priorityText}</span></div>
+            <div class="message-detail-container">
+                <div class="message-detail-header priority-${priorityClass}">
+                    <div class="message-header-content">
+                        <span class="message-priority-badge ${priorityClass}">${priorityText}</span>
+                        <h2 class="message-detail-title">${msg.title}</h2>
+                    </div>
+                    <button class="message-close-btn" onclick="closeMessageModal()">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
                 </div>
-                <div class="message-content">
-                    ${msg.previewText || 'Kein Inhalt verfügbar'}
+                <div class="message-detail-body">
+                    ${msg.author ? `
+                        <div class="message-author-card">
+                            <div class="author-avatar">
+                                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                </svg>
+                            </div>
+                            <div class="author-info">
+                                <span class="author-name">${msg.author}</span>
+                            </div>
+                        </div>
+                    ` : ''}
+                    <div class="message-content-wrapper">
+                        <div class="message-body-content">
+                            <p>${msg.previewText || 'Kein Inhalt verfügbar'}</p>
+                        </div>
+                    </div>
+                    <div class="message-error-note">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                        </svg>
+                        <span>Vollständiger Inhalt konnte nicht geladen werden</span>
+                    </div>
                 </div>
             </div>
         `;
