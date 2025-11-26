@@ -1405,7 +1405,11 @@ def isy_archive_message():
         # Get request data
         data = request.get_json()
         recipient_id = data.get('recipientId')  # e.g., "/message_recipients/11270998"
-        archive_action = data.get('archive', 'Archive')  # "Archive" or "Inbox"
+        archive_action = data.get('archive', 'Archive')  # "Archive" to archive, "None" to unarchive
+        
+        # Convert "Inbox" to "None" for API compatibility (frontend might use "Inbox")
+        if archive_action == 'Inbox':
+            archive_action = 'None'
         
         if not recipient_id:
             return jsonify({
